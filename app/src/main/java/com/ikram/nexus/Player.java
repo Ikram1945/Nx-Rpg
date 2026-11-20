@@ -12,6 +12,8 @@ import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
  * Tiap frame animasi adalah berkas PNG sendiri di sprites/frames/
  * (down_0..2, left_0..2, up_0..2, right_0..2) — sengaja tidak memakai
  * potongan spritesheet supaya tidak ada risiko salah potong tekstur.
+ * Isi gambar kesatria 16x20 ditaruh di tengah-bawah kanvas 32x32
+ * (ukuran pangkat-dua, paling aman untuk semua GPU).
  * Kolom frame: 0 = langkah A, 1 = diam/tengah, 2 = langkah B.
  * Posisi (x, y) = titik tengah-bawah sprite (jejak kaki).
  */
@@ -114,7 +116,9 @@ public class Player {
         TextureRegion frame = moving
                 ? walk[facing].getKeyFrame(stateTime, true)
                 : idle[facing];
-        batch.draw(frame, x - FRAME_W / 2f, y, FRAME_W, FRAME_H);
+        // Kanvas gambar 32x32; kesatria 16x20 ada di tengah-bawahnya,
+        // jadi gambar digeser 16 ke kiri dari titik kaki.
+        batch.draw(frame, x - 16f, y, 32f, 32f);
     }
 
     public void dispose() {
