@@ -9,11 +9,6 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 
 /**
-<<<<<<< HEAD
- * Karakter pemain: sprite 4 arah dari sprites/player.png.
- * Susunan baris sheet: 0 = bawah, 1 = kiri, 2 = atas, 3 = kanan.
- * Tiap arah 3 frame jalan; urutan putar 0-1-2-1 supaya langkahnya halus.
-=======
  * Karakter pemain: kesatria berpedang 16x20.
  * Sprite DIGAMBAR DARI KODE: peta piksel di bawah diubah menjadi
  * Pixmap lalu Texture saat game mulai — tanpa berkas gambar sama
@@ -21,26 +16,15 @@ import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
  * Tiap frame ditaruh di tengah-bawah kanvas 32x32 (pangkat dua).
  * Urutan arah: 0=bawah, 1=kiri, 2=atas, 3=kanan.
  * Frame per arah: 0=langkah A, 1=diam/tengah, 2=langkah B.
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
  * Posisi (x, y) = titik tengah-bawah sprite (jejak kaki).
  */
 public class Player {
     public static final int DOWN = 0, LEFT = 1, UP = 2, RIGHT = 3;
-<<<<<<< HEAD
-=======
     private static final int FRAME_W = 16, FRAME_H = 20;
     private static final float SPEED = 72f;    // piksel dunia per detik
     private static final float HALF_W = 5f;    // setengah lebar kotak tabrakan
     private static final float BOX_H = 8f;     // tinggi kotak tabrakan (area kaki)
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
 
-<<<<<<< HEAD
-    private static final int FRAME_W = 35;
-    private static final int FRAME_H = 40;
-    private static final float SPEED = 75f;      // piksel per detik
-    private static final float HALF_W = 6f;      // setengah lebar kotak tabrak (di kaki)
-    private static final float BOX_H = 10f;      // tinggi kotak tabrak dari telapak
-=======
     // Peta piksel kesatria: [arah][frame] = 20 baris x 16 karakter.
     // '.' = transparan; huruf lain = warna (lihat colorOf).
     private static final String[][][] PIXELS = {
@@ -53,15 +37,9 @@ public class Player {
         // kanan
         { { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "....BB....BB..W.", "...BB.....BB..W.", ".EE.......EE....", "EEE.......EEE..." }, { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "......BB.BB...W.", "......BB.BB...W.", "......EE.EE.....", ".....EEE.EEE...." }, { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "......BB.BB...W.", "......BBBB....W.", ".....EE....EE...", "...EEE.....EEE.." } }
     };
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
 
-<<<<<<< HEAD
-    private final Texture sheet;
-    private final Animation<TextureRegion>[] walk = new Animation[4];
-=======
     private final Texture[][] textures = new Texture[4][3];
     private final Animation<TextureRegion>[] walk;
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
     private final TextureRegion[] idle = new TextureRegion[4];
     private final TiledMapTileLayer collision;
     private final float mapPixelW, mapPixelH;
@@ -80,20 +58,8 @@ public class Player {
         x = startX;
         y = startY;
 
-<<<<<<< HEAD
-        sheet = new Texture(Gdx.files.internal("sprites/player.png"));
-        sheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-
-=======
         TextureRegion[][] regions = new TextureRegion[4][3];
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
         for (int dir = 0; dir < 4; dir++) {
-<<<<<<< HEAD
-            TextureRegion[] frames = new TextureRegion[4];
-            for (int i = 0; i < 4; i++) {
-                int col = new int[]{0, 1, 2, 1}[i];
-                frames[i] = new TextureRegion(sheet, col * FRAME_W, dir * FRAME_H, FRAME_W, FRAME_H);
-=======
             for (int f = 0; f < 3; f++) {
                 Pixmap pm = new Pixmap(32, 32, Pixmap.Format.RGBA8888);
                 String[] rows = PIXELS[dir][f];
@@ -111,23 +77,14 @@ public class Player {
                 pm.dispose();
                 textures[dir][f] = tex;
                 regions[dir][f] = new TextureRegion(tex);
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
             }
-<<<<<<< HEAD
-            walk[dir] = new Animation<>(0.13f, frames);
-=======
         }
         walk = new Animation[4];
         for (int dir = 0; dir < 4; dir++) {
             walk[dir] = new Animation<>(0.13f,
                     regions[dir][0], regions[dir][1], regions[dir][2], regions[dir][1]);
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
             walk[dir].setPlayMode(Animation.PlayMode.LOOP);
-<<<<<<< HEAD
-            idle[dir] = new TextureRegion(sheet, FRAME_W, dir * FRAME_H, FRAME_W, FRAME_H);
-=======
             idle[dir] = regions[dir][1];
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
         }
     }
 
@@ -203,12 +160,8 @@ public class Player {
     }
 
     public void dispose() {
-<<<<<<< HEAD
-        sheet.dispose();
-=======
         for (Texture[] row : textures) {
             for (Texture t : row) t.dispose();
         }
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
     }
 }
