@@ -38,32 +38,155 @@ public class Player {
         { { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "....BB....BB..W.", "...BB.....BB..W.", ".EE.......EE....", "EEE.......EEE..." }, { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "......BB.BB...W.", "......BB.BB...W.", "......EE.EE.....", ".....EEE.EEE...." }, { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "......BB.BB...W.", "......BBBB....W.", ".....EE....EE...", "...EEE.....EEE.." } }
     };
 
-    // Peta piksel pedang 16x16 (menghadap ke atas; gagang di bawah).
-    private static final String[] SWORD = {
-            "................",
-            ".......WW.......",
-            ".......WW.......",
-            ".......Ww.......",
-            ".......Ww.......",
-            ".......Ww.......",
-            ".......Ww.......",
-            ".......Ww.......",
-            ".......Ww.......",
-            ".......Ww.......",
-            "......GGGGG.....",
-            ".......HH.......",
-            ".......HH.......",
-            ".......HH.......",
-            "......GGGG......",
-            "................",
+    // Pose serang per arah: kanvas 32x32 penuh (badan + pedang menyatu),
+    // urutan [bawah, kiri, atas, kanan], 32 baris x 32 karakter per arah.
+    private static final String[][] ATTACK_PIXELS = {
+        {  // down
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "..............RRR...............",
+                ".............RRRRR..............",
+                ".............SSSSSS.............",
+                "............SSSSSSSS............",
+                "............SSSSSSSS............",
+                "............SKKKKKKS............",
+                "............SSSSSSSS............",
+                ".............SSSSSS.............",
+                "...........SSSSSSSSSS...........",
+                "..........SSSSSSSSSSSS..........",
+                "..........sSSSSSSSSSSs..........",
+                "..........HGWWWWWWWWWWW.........",
+                ".........HHGwwwwwwwwww..........",
+                "............sSBBBBSS............",
+                ".............BBBBBB.............",
+                ".............BBBBBB.............",
+                ".............BB..BB.............",
+                ".............BB..BB.............",
+                ".............EE..EE.............",
+                "............EEE..EEE............"
+        },
+        {  // left
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "...............RRRR.............",
+                "..............RRRRRR............",
+                ".............SSSSSS.............",
+                "............SSSSSSSS............",
+                "...........SSSSSSSS.............",
+                "..........KSSSSSSS..............",
+                "..........KSSSSSSS..............",
+                "............SSSSSS..............",
+                "...........SSSSSSSS.............",
+                "...........SSSSSSSSS............",
+                "...........SSSSSSS..............",
+                "WWWWWWWWG..SGGGGGG..............",
+                "..wwwwwwGHHSSBBBB...............",
+                "............SBBBB...............",
+                ".............BBBB...............",
+                ".............BBBB...............",
+                ".............BB.BB..............",
+                ".............BB.BB..............",
+                ".............EE.EE..............",
+                "............EEE.EEE............."
+        },
+        {  // up
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "..............RRR...............",
+                ".............RRRRR..............",
+                ".............SSSSSS.............",
+                "............SSSSSSWS............",
+                "............SSSdSWwS............",
+                "............SSSdWwSS............",
+                "............SSSWwSSS............",
+                ".............SWwSSS.............",
+                "...........SSWwSSSSSS...........",
+                "..........SSWwSSSSSSSS..........",
+                "..........sWwBBBBBBBSs..........",
+                "..........GwBBBBBBBBSs..........",
+                ".........HGsBBBBBBBBs...........",
+                "............BBBBBBBB............",
+                "............BBBBBBBB............",
+                "............BBBBBBBB............",
+                ".............BB..BB.............",
+                ".............BB..BB.............",
+                ".............EE..EE.............",
+                "............EEE..EEE............"
+        },
+        {  // right
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                ".............RRRR...............",
+                "............RRRRRR..............",
+                ".............SSSSSS.............",
+                "............SSSSSSSS............",
+                ".............SSSSSSSS...........",
+                "..............SSSSSSSK..........",
+                "..............SSSSSSSK..........",
+                "..............SSSSSS............",
+                ".............SSSSSSSS...........",
+                "............SSSSSSSSS...........",
+                "..............SSSSSSS...........",
+                "..............GGGGGGS..GWWWWWWWW",
+                "...............BBBBSSHHGwwwwww..",
+                "...............BBBBS............",
+                "...............BBBB.............",
+                "...............BBBB.............",
+                "..............BB.BB.............",
+                "..............BB.BB.............",
+                "..............EE.EE.............",
+                ".............EEE.EEE............"
+        }
     };
     private static final float ATTACK_DUR = 0.22f;  // lama ayunan pedang (detik)
 
     private final Texture[][] textures = new Texture[4][3];
     private final Animation<TextureRegion>[] walk;
     private final TextureRegion[] idle = new TextureRegion[4];
-    private final Texture swordTex;
-    private final TextureRegion swordRegion;
+    private final Texture[] attackTextures = new Texture[4];
+    private final TextureRegion[] attackRegions = new TextureRegion[4];
+    private final Texture arcTex;
+    private final TextureRegion arcRegion;
     private final TiledMapTileLayer collision;
     private final float mapPixelW, mapPixelH;
 
@@ -117,21 +240,49 @@ public class Player {
             idle[dir] = regions[dir][1];
         }
 
-        // Tekstur pedang untuk ayunan, juga digambar dari peta piksel
-        Pixmap spm = new Pixmap(32, 32, Pixmap.Format.RGBA8888);
-        for (int row = 0; row < 16; row++) {
-            String line = SWORD[row];
-            for (int col = 0; col < 16; col++) {
-                char ch = line.charAt(col);
-                if (ch == '.') continue;
-                spm.setColor(colorOf(ch));
-                spm.drawPixel(8 + col, 8 + row);
+        // Pose serang per arah (kanvas 32x32 penuh; pedang menyatu dengan badan)
+        for (int dir = 0; dir < 4; dir++) {
+            Pixmap pm = new Pixmap(32, 32, Pixmap.Format.RGBA8888);
+            String[] rows = ATTACK_PIXELS[dir];
+            for (int row = 0; row < 32; row++) {
+                String line = rows[row];
+                for (int col = 0; col < 32; col++) {
+                    char ch = line.charAt(col);
+                    if (ch == '.') continue;
+                    pm.setColor(colorOf(ch));
+                    pm.drawPixel(col, row);
+                }
+            }
+            attackTextures[dir] = new Texture(pm);
+            attackTextures[dir].setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            pm.dispose();
+            attackRegions[dir] = new TextureRegion(attackTextures[dir]);
+        }
+
+        // Tekstur busur sabetan: lengkungan putih yang memudar di tepi,
+        // digambar prosedural dari uji jarak + sudut tiap piksel.
+        Pixmap apm = new Pixmap(32, 32, Pixmap.Format.RGBA8888);
+        for (int row = 0; row < 32; row++) {
+            for (int col = 0; col < 32; col++) {
+                double dx = col - 15.5;
+                double dy = 15.5 - row;
+                double r = Math.sqrt(dx * dx + dy * dy);
+                double ang = Math.toDegrees(Math.atan2(dy, dx));   // 90 = atas
+                if (r >= 11.5 && r <= 15.5 && ang >= 30.0 && ang <= 150.0) {
+                    double fadeR = 1.0 - Math.abs(r - 13.5) / 2.0;
+                    double fadeA = 1.0 - Math.abs(ang - 90.0) / 60.0;
+                    float a = (float) Math.max(0.0, Math.min(fadeR, fadeA));
+                    if (a > 0.03f) {
+                        apm.setColor(0.94f, 0.97f, 1f, a);
+                        apm.drawPixel(col, row);
+                    }
+                }
             }
         }
-        swordTex = new Texture(spm);
-        swordTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        spm.dispose();
-        swordRegion = new TextureRegion(swordTex);
+        arcTex = new Texture(apm);
+        arcTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        apm.dispose();
+        arcRegion = new TextureRegion(arcTex);
     }
 
     /** Kena serangan musuh dari titik (sx, sy): darah -1, terpental, kebal 1 detik. */
@@ -250,43 +401,45 @@ public class Player {
     }
 
     public void draw(SpriteBatch batch) {
-        TextureRegion frame = moving
-                ? walk[facing].getKeyFrame(stateTime, true)
-                : idle[facing];
+        boolean attacking = attackTime > 0f;
+        float p = attacking ? 1f - attackTime / ATTACK_DUR : 0f;
+        // Terjang kecil ke arah hadap di puncak ayunan — badan ikut bergerak
+        float lunge = attacking ? (float) Math.sin(Math.PI * p) * 3f : 0f;
+        float fx = facing == RIGHT ? 1f : facing == LEFT ? -1f : 0f;
+        float fy = facing == UP ? 1f : facing == DOWN ? -1f : 0f;
+        float ox = fx * lunge;
+        float oy = fy * lunge;
+
+        TextureRegion frame = attacking
+                ? attackRegions[facing]
+                : moving ? walk[facing].getKeyFrame(stateTime, true) : idle[facing];
         // Berkedip tembus pandang selagi kebal setelah kena serangan
         if (invulnTime > 0f && ((int) (invulnTime * 12f)) % 2 == 0) {
             batch.setColor(1f, 1f, 1f, 0.45f);
         }
         // Kanvas gambar 32x32; kesatria 16x20 ada di tengah-bawahnya,
         // jadi gambar digeser 16 ke kiri dari titik kaki.
-        batch.draw(frame, x - 16f, y, 32f, 32f);
+        batch.draw(frame, x - 16f + ox, y + oy, 32f, 32f);
         batch.setColor(1f, 1f, 1f, 1f);
 
-        if (attackTime > 0f) {
-            float p = 1f - attackTime / ATTACK_DUR;
+        if (attacking) {
+            // Busur sabetan di depan kesatria, memuncak di tengah ayunan
+            float alpha = (float) Math.sin(Math.PI * p) * 0.7f;
             float facingAngle = facing == RIGHT ? 0f
                     : facing == UP ? 90f
                     : facing == LEFT ? 180f : -90f;
-            // Ayunan menyapu dari +55 derajat ke -55 derajat dari arah hadap
-            float rot = facingAngle - 90f + (55f - 110f * p);
-            drawSword(batch, rot + 30f, 0.15f);  // bayangan ayunan
-            drawSword(batch, rot + 15f, 0.30f);
-            drawSword(batch, rot, 1f);
+            batch.setColor(1f, 1f, 1f, alpha);
+            batch.draw(arcRegion, x - 16f + ox, y - 6f + oy,
+                    16f, 16f, 32f, 32f, 1f, 1f, facingAngle - 90f);
             batch.setColor(1f, 1f, 1f, 1f);
         }
-    }
-
-    private void drawSword(SpriteBatch batch, float rotation, float alpha) {
-        batch.setColor(1f, 1f, 1f, alpha);
-        // Poros di gagang pedang (16, 12 pada kanvas 32x32), ditaruh di
-        // titik tangan kesatria (x, y + 9)
-        batch.draw(swordRegion, x - 16f, y - 3f, 16f, 12f, 32f, 32f, 1f, 1f, rotation);
     }
 
     public void dispose() {
         for (Texture[] row : textures) {
             for (Texture t : row) t.dispose();
         }
-        swordTex.dispose();
+        for (Texture t : attackTextures) t.dispose();
+        arcTex.dispose();
     }
 }
