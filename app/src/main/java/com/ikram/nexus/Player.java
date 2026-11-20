@@ -8,7 +8,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 
 /**
- * Karakter pemain: kesatria berpedang 16x20 dari sprites/player.png.
+ * Karakter pemain: sprite 4 arah dari sprites/player.png.
  * Susunan baris sheet: 0 = bawah, 1 = kiri, 2 = atas, 3 = kanan.
  * Tiap arah 3 frame jalan; urutan putar 0-1-2-1 supaya langkahnya halus.
  * Posisi (x, y) = titik tengah-bawah sprite (jejak kaki).
@@ -17,11 +17,11 @@ public class Player {
 
     public static final int DOWN = 0, LEFT = 1, UP = 2, RIGHT = 3;
 
-    private static final int FRAME_W = 16;
-    private static final int FRAME_H = 20;
-    private static final float SPEED = 72f;      // piksel per detik
-    private static final float HALF_W = 5f;      // setengah lebar kotak tabrak (di kaki)
-    private static final float BOX_H = 8f;       // tinggi kotak tabrak dari telapak
+    private static final int FRAME_W = 35;
+    private static final int FRAME_H = 40;
+    private static final float SPEED = 75f;      // piksel per detik
+    private static final float HALF_W = 6f;      // setengah lebar kotak tabrak (di kaki)
+    private static final float BOX_H = 10f;      // tinggi kotak tabrak dari telapak
 
     private final Texture sheet;
     private final Animation<TextureRegion>[] walk = new Animation[4];
