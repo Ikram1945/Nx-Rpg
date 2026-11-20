@@ -1,12 +1,19 @@
 package com.ikram.nexus;
 
-import android.app.Activity;
 import android.os.Bundle;
 
-public class MainActivity extends Activity {
+import com.badlogic.gdx.backends.android.AndroidApplication;
+import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration;
+
+/** Pintu masuk Android: menjalankan game libGDX (NxRpgGame). */
+public class MainActivity extends AndroidApplication {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        AndroidApplicationConfiguration config = new AndroidApplicationConfiguration();
+        config.useImmersiveMode = true;
+        config.useAccelerometer = false;
+        config.useCompass = false;
+        initialize(new NxRpgGame(), config);
     }
 }
