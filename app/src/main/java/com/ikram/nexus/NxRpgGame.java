@@ -7,7 +7,6 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.TiledMapTileSet;
@@ -21,9 +20,9 @@ import java.util.HashSet;
 
 /**
  * Nx RPG — tahap awal.
- * Peta desa dari Tiled (.tmx), pemain bisa jalan 4 arah dengan animasi,
- * kamera mengikuti, kendali: joystick sentuh (tahan + geser di mana saja)
- * atau WASD / tombol panah bila ada keyboard.
+ * Peta desa dari Tiled (.tmx), pemain (kesatria) bisa jalan 4 arah dengan
+ * animasi, kamera mengikuti. Kendali: joystick tetap di kiri bawah layar
+ * (sentuh + geser di separuh kiri layar) atau WASD / tombol panah.
  */
 public class NxRpgGame extends ApplicationAdapter {
 
@@ -33,7 +32,8 @@ public class NxRpgGame extends ApplicationAdapter {
     private OrthographicCamera camera;
     private Viewport viewport;
     private OrthographicCamera screenCam;       // khusus UI layar (joystick)
-    private ShapeRenderer shapes;
+    private SpriteBatch uiBatch;
+    private Texture joyBaseTex, joyKnobTex;
 
     private TiledMap map;
     private OrthogonalTiledMapRenderer mapRenderer;
@@ -41,17 +41,23 @@ public class NxRpgGame extends ApplicationAdapter {
 
     private Player player;
 
-    // Joystick sentuh
+    // Joystick tetap (posisi dalam piksel layar, y ke atas)
     private boolean joyActive = false;
-    private float joyOriginX, joyOriginY;       // koordinat layar (y ke atas)
-    private float joyDirX, joyDirY;
+    private float joyCenterX, joyCenterY;
+    private float joyBaseSize, joyKnobSize, joyTravel;
+    private float knobX, knobY;                 // posisi tengah knob saat ini
+    private float moveX, moveY;                 // arah gerak akhir (ternormalisasi)
 
     @Override
     public void create() {
         camera = new OrthographicCamera();
         viewport = new FitViewport(VIEW_W, VIEW_H, camera);
         screenCam = new OrthographicCamera();
-        shapes = new ShapeRenderer();
+        uiBatch = new SpriteBatch();
+
+        joyBaseTex = new Texture(Gdx.files.internal("ui/joy_base.png"));
+        joyKnobTex = new Texture(Gdx.files.internal("ui/joy_knob.png"));
+        layoutJoystick();
 
         map = new TmxMapLoader().load("maps/village.tmx");
         // Pixel art harus tajam: paksa filter Nearest pada tekstur tileset
@@ -74,10 +80,23 @@ public class NxRpgGame extends ApplicationAdapter {
         player = new Player(collision, mapPixelW / 2f, mapPixelH / 2f, mapPixelW, mapPixelH);
     }
 
+    private void layoutJoystick() {
+        float density = Gdx.graphics.getDensity();
+        joyBaseSize = 118f * density;
+        joyKnobSize = 52f * density;
+        joyTravel = joyBaseSize * 0.30f;
+        float margin = 22f * density;
+        joyCenterX = margin + joyBaseSize / 2f;
+        joyCenterY = margin + joyBaseSize / 2f;
+        knobX = joyCenterX;
+        knobY = joyCenterY;
+    }
+
     @Override
     public void resize(int width, int height) {
         viewport.update(width, height, true);
         screenCam.setToOrtho(false, width, height);
+        layoutJoystick();
     }
 
     @Override
@@ -85,7 +104,7 @@ public class NxRpgGame extends ApplicationAdapter {
         float delta = Math.min(Gdx.graphics.getDeltaTime(), 1f / 30f);
 
         readInput();
-        player.update(delta, joyDirX, joyDirY);
+        player.update(delta, moveX, moveY);
         updateCamera();
 
         Gdx.gl.glClearColor(0.08f, 0.12f, 0.08f, 1f);
@@ -112,7 +131,7 @@ public class NxRpgGame extends ApplicationAdapter {
         camera.update();
     }
 
-    /** Baca keyboard + joystick sentuh, hasil akhir di joyDirX/joyDirY (ternormalisasi). */
+    /** Baca keyboard + joystick sentuh, hasil akhir di moveX/moveY (ternormalisasi). */
     private void readInput() {
         float dx = 0f, dy = 0f;
 
@@ -122,26 +141,31 @@ public class NxRpgGame extends ApplicationAdapter {
         if (Gdx.input.isKeyPressed(Input.Keys.S) || Gdx.input.isKeyPressed(Input.Keys.DOWN)) dy -= 1f;
 
         float density = Gdx.graphics.getDensity();
-        float radius = 55f * density;
-        float deadzone = 9f * density;
+        float deadzone = 8f * density;
 
-        if (Gdx.input.justTouched()) {
+        // Joystick: sentuhan yang mulai di separuh kiri layar mengendalikan knob
+        if (Gdx.input.justTouched() && Gdx.input.getX() < Gdx.graphics.getWidth() * 0.55f) {
             joyActive = true;
-            joyOriginX = Gdx.input.getX();
-            joyOriginY = Gdx.graphics.getHeight() - Gdx.input.getY();
         }
-        if (Gdx.input.isTouched() && joyActive) {
+        if (joyActive && Gdx.input.isTouched()) {
             float tx = Gdx.input.getX();
             float ty = Gdx.graphics.getHeight() - Gdx.input.getY();
-            float vx = tx - joyOriginX;
-            float vy = ty - joyOriginY;
+            float vx = tx - joyCenterX;
+            float vy = ty - joyCenterY;
             float len = (float) Math.sqrt(vx * vx + vy * vy);
+            float clamped = Math.min(len, joyTravel);
+            if (len > 0.01f) {
+                knobX = joyCenterX + vx / len * clamped;
+                knobY = joyCenterY + vy / len * clamped;
+            }
             if (len > deadzone) {
                 dx = vx / len;
                 dy = vy / len;
             }
-        } else if (!Gdx.input.isTouched()) {
+        } else {
             joyActive = false;
+            knobX = joyCenterX;
+            knobY = joyCenterY;
         }
 
         // Normalisasi diagonal keyboard
@@ -150,40 +174,24 @@ public class NxRpgGame extends ApplicationAdapter {
             dx /= len;
             dy /= len;
         }
-        joyDirX = dx;
-        joyDirY = dy;
-
-        // Simpan posisi knob untuk digambar
-        if (joyActive && Gdx.input.isTouched()) {
-            float tx = Gdx.input.getX();
-            float ty = Gdx.graphics.getHeight() - Gdx.input.getY();
-            float vx = tx - joyOriginX;
-            float vy = ty - joyOriginY;
-            float l = (float) Math.sqrt(vx * vx + vy * vy);
-            if (l > radius) {
-                vx = vx / l * radius;
-                vy = vy / l * radius;
-            }
-            knobX = joyOriginX + vx;
-            knobY = joyOriginY + vy;
-        }
+        moveX = dx;
+        moveY = dy;
     }
 
-    private float knobX, knobY;
-
     private void drawJoystick() {
-        if (!joyActive) return;
-        float density = Gdx.graphics.getDensity();
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-        shapes.setProjectionMatrix(screenCam.combined);
-        shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(1f, 1f, 1f, 0.15f);
-        shapes.circle(joyOriginX, joyOriginY, 55f * density);
-        shapes.setColor(1f, 1f, 1f, 0.35f);
-        shapes.circle(knobX, knobY, 24f * density);
-        shapes.end();
-        Gdx.gl.glDisable(GL20.GL_BLEND);
+        uiBatch.setProjectionMatrix(screenCam.combined);
+        uiBatch.begin();
+        // Basis sedikit redup saat tidak dipakai, terang saat aktif
+        uiBatch.setColor(1f, 1f, 1f, joyActive ? 0.95f : 0.6f);
+        uiBatch.draw(joyBaseTex,
+                joyCenterX - joyBaseSize / 2f, joyCenterY - joyBaseSize / 2f,
+                joyBaseSize, joyBaseSize);
+        uiBatch.setColor(1f, 1f, 1f, joyActive ? 1f : 0.75f);
+        uiBatch.draw(joyKnobTex,
+                knobX - joyKnobSize / 2f, knobY - joyKnobSize / 2f,
+                joyKnobSize, joyKnobSize);
+        uiBatch.setColor(1f, 1f, 1f, 1f);
+        uiBatch.end();
     }
 
     @Override
@@ -191,6 +199,8 @@ public class NxRpgGame extends ApplicationAdapter {
         player.dispose();
         mapRenderer.dispose();
         map.dispose();
-        shapes.dispose();
+        joyBaseTex.dispose();
+        joyKnobTex.dispose();
+        uiBatch.dispose();
     }
 }

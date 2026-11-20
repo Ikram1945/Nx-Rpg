@@ -7,13 +7,14 @@ ApkBuild/CodeAssist satu modul (paket `com.ikram.nexus`).
 
 - Peta desa 40×30 tile (`app/src/main/assets/maps/village.tmx`, format Tiled):
   jalan tanah bersilang, 3 rumah, kandang berpagar, pohon, jamur, papan nama.
-- Karakter pemain dengan animasi jalan 4 arah (bawah/kiri/atas/kanan).
+- Karakter pemain: kesatria berpedang 16×20 dengan animasi jalan 4 arah
+  (bawah/kiri/atas/kanan).
 - Kamera mengikuti pemain dan terjepit di tepi peta.
 - Tabrakan (collision) dari layer `collision` di peta: rumah, pohon, pagar,
   dan air tidak bisa ditembus; pemain meluncur di sepanjang dinding.
 - Kendali:
-  - **Sentuh**: tahan di mana saja lalu geser — joystick virtual muncul di
-    titik sentuh, arah geser = arah jalan.
+  - **Sentuh**: joystick tetap di kiri bawah layar — sentuh di separuh kiri
+    layar lalu geser, knob mengikuti arah geser.
   - **Keyboard**: WASD atau tombol panah.
 
 ## Struktur kode
@@ -31,10 +32,9 @@ Aset ada di `app/src/main/assets/` (`maps/`, `tilesets/`, `sprites/`).
 - Tileset **“Tiny Town”** oleh Kenney (kenney.nl) — lisensi **CC0**
   (bebas pakai, tanpa atribusi wajib). Lisensi lengkap di
   `app/src/main/assets/tilesets/kenney-license.txt`.
-- Sprite karakter **“RPG Character”** oleh **Curt** (OpenGameArt.org) —
-  lisensi **CC-BY 3.0**. Sheet aslinya ditata ulang menjadi grid seragam
-  35×40 piksel per frame (12 frame: 4 arah × 3 langkah) di
-  `app/src/main/assets/sprites/player.png`.
+- Sprite kesatria di `app/src/main/assets/sprites/player.png` dan grafis
+  joystick di `app/src/main/assets/ui/` digambar khusus untuk proyek ini
+  (peta piksel dari kode), bebas dipakai tanpa atribusi.
 
 ## Rencana tahap berikutnya
 
