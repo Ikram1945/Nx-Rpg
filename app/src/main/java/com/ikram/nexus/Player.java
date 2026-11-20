@@ -8,23 +8,14 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 
 /**
-<<<<<<< HEAD
  * Karakter pemain: sprite 4 arah dari sprites/player.png.
  * Susunan baris sheet: 0 = bawah, 1 = kiri, 2 = atas, 3 = kanan.
  * Tiap arah 3 frame jalan; urutan putar 0-1-2-1 supaya langkahnya halus.
-=======
- * Karakter pemain: kesatria berpedang 16x20.
- * Tiap frame animasi adalah berkas PNG sendiri di sprites/frames/
- * (down_0..2, left_0..2, up_0..2, right_0..2) — sengaja tidak memakai
- * potongan spritesheet supaya tidak ada risiko salah potong tekstur.
- * Kolom frame: 0 = langkah A, 1 = diam/tengah, 2 = langkah B.
->>>>>>> branch 'master' of https://github.com/Ikram1945/Nx-Rpg.git
  * Posisi (x, y) = titik tengah-bawah sprite (jejak kaki).
  */
 public class Player {
 
     public static final int DOWN = 0, LEFT = 1, UP = 2, RIGHT = 3;
-    private static final String[] DIR_NAME = {"down", "left", "up", "right"};
 
     private static final int FRAME_W = 35;
     private static final int FRAME_H = 40;
@@ -32,7 +23,7 @@ public class Player {
     private static final float HALF_W = 6f;      // setengah lebar kotak tabrak (di kaki)
     private static final float BOX_H = 10f;      // tinggi kotak tabrak dari telapak
 
-    private final Texture[][] textures = new Texture[4][3];
+    private final Texture sheet;
     private final Animation<TextureRegion>[] walk = new Animation[4];
     private final TextureRegion[] idle = new TextureRegion[4];
     private final TiledMapTileLayer collision;
@@ -52,20 +43,18 @@ public class Player {
         this.x = startX;
         this.y = startY;
 
+        sheet = new Texture(Gdx.files.internal("sprites/player.png"));
+        sheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+
         for (int dir = 0; dir < 4; dir++) {
-            TextureRegion[] regions = new TextureRegion[3];
-            for (int col = 0; col < 3; col++) {
-                Texture t = new Texture(
-                        Gdx.files.internal("sprites/frames/" + DIR_NAME[dir] + "_" + col + ".png"));
-                t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-                textures[dir][col] = t;
-                regions[col] = new TextureRegion(t);
+            TextureRegion[] frames = new TextureRegion[4];
+            for (int i = 0; i < 4; i++) {
+                int col = new int[]{0, 1, 2, 1}[i];
+                frames[i] = new TextureRegion(sheet, col * FRAME_W, dir * FRAME_H, FRAME_W, FRAME_H);
             }
-            // Urutan langkah 0-1-2-1 supaya halus
-            walk[dir] = new Animation<>(0.13f,
-                    regions[0], regions[1], regions[2], regions[1]);
+            walk[dir] = new Animation<>(0.13f, frames);
             walk[dir].setPlayMode(Animation.PlayMode.LOOP);
-            idle[dir] = regions[1];
+            idle[dir] = new TextureRegion(sheet, FRAME_W, dir * FRAME_H, FRAME_W, FRAME_H);
         }
     }
 
@@ -124,10 +113,6 @@ public class Player {
     }
 
     public void dispose() {
-        for (int dir = 0; dir < 4; dir++) {
-            for (int col = 0; col < 3; col++) {
-                textures[dir][col].dispose();
-            }
-        }
+        sheet.dispose();
     }
 }
