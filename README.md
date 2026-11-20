@@ -12,6 +12,13 @@ ApkBuild/CodeAssist satu modul (paket `com.ikram.nexus`).
 - Kamera mengikuti pemain dan terjepit di tepi peta.
 - Tabrakan (collision) dari layer `collision` di peta: rumah, pohon, pagar,
   dan air tidak bisa ditembus; pemain meluncur di sepanjang dinding.
+- Musuh: 3 slime berkeliaran di desa (digambar dari kode juga). Slime
+  mendeteksi pemain dalam radius 72 piksel, mengejar (kecepatan 40,
+  pemain 72 — masih bisa kabur), dan menyerang tiap ±1 detik saat dekat:
+  pemain kehilangan 1 hati, terpental, dan kebal 1 detik. Pedang pemain
+  membunuh slime dalam 3 ayunan; slime muncul lagi di titik asalnya
+  setelah 6 detik. Darah pemain 5 hati (HUD di kiri atas); kalau habis,
+  pemain bangun lagi di persimpangan dengan darah penuh.
 - Kendali:
   - **Sentuh**: joystick tetap di kiri bawah layar — sentuh di separuh kiri
     layar lalu geser, knob mengikuti arah geser.

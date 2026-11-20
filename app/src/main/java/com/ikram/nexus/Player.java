@@ -67,11 +67,17 @@ public class Player {
     private final TiledMapTileLayer collision;
     private final float mapPixelW, mapPixelH;
 
+    public static final int MAX_HP = 5;
+
     public float x, y;
     public int facing = DOWN;
+    public int hp = MAX_HP;
+    public boolean dead;
     private float stateTime;
     private boolean moving;
     private float attackTime;
+    private float invulnTime;   // kebal sesaat setelah kena serangan
+    private float kbx, kby;     // kecepatan terpental
 
     @SuppressWarnings("unchecked")
     public Player(TiledMapTileLayer collisionLayer, float startX, float startY,
@@ -128,6 +134,36 @@ public class Player {
         swordRegion = new TextureRegion(swordTex);
     }
 
+    /** Kena serangan musuh dari titik (sx, sy): darah -1, terpental, kebal 1 detik. */
+    public void takeDamage(float sx, float sy) {
+        if (invulnTime > 0f || dead) return;
+        hp--;
+        invulnTime = 1f;
+        float dx = x - sx;
+        float dy = y - sy;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.01f) {
+            dx = 0f;
+            dy = -1f;
+            len = 1f;
+        }
+        kbx = dx / len * 140f;
+        kby = dy / len * 140f;
+        if (hp <= 0) dead = true;
+    }
+
+    /** Bangun lagi di titik (rx, ry) dengan darah penuh. */
+    public void respawn(float rx, float ry) {
+        x = rx;
+        y = ry;
+        hp = MAX_HP;
+        dead = false;
+        invulnTime = 2f;
+        attackTime = 0f;
+        kbx = kby = 0f;
+        facing = DOWN;
+    }
+
     /** Mulai ayunan pedang (atau ulang dari awal kalau ditekan lagi). */
     public void attack() {
         attackTime = ATTACK_DUR;
@@ -161,6 +197,19 @@ public class Player {
     /** Gerakkan pemain; moveX/moveY dalam rentang -1..1. */
     public void update(float delta, float moveX, float moveY) {
         if (attackTime > 0f) attackTime -= delta;
+        if (invulnTime > 0f) invulnTime -= delta;
+
+        // Terpental karena serangan musuh
+        if (kbx != 0f || kby != 0f) {
+            if (!blocked(x + kbx * delta, y)) x += kbx * delta;
+            if (!blocked(x, y + kby * delta)) y += kby * delta;
+            float decay = Math.max(0f, 1f - 7f * delta);
+            kbx *= decay;
+            kby *= decay;
+            if (Math.abs(kbx) < 1f) kbx = 0f;
+            if (Math.abs(kby) < 1f) kby = 0f;
+        }
+
         moving = moveX != 0 || moveY != 0;
         if (!moving) {
             stateTime = 0f;
@@ -204,9 +253,14 @@ public class Player {
         TextureRegion frame = moving
                 ? walk[facing].getKeyFrame(stateTime, true)
                 : idle[facing];
+        // Berkedip tembus pandang selagi kebal setelah kena serangan
+        if (invulnTime > 0f && ((int) (invulnTime * 12f)) % 2 == 0) {
+            batch.setColor(1f, 1f, 1f, 0.45f);
+        }
         // Kanvas gambar 32x32; kesatria 16x20 ada di tengah-bawahnya,
         // jadi gambar digeser 16 ke kiri dari titik kaki.
         batch.draw(frame, x - 16f, y, 32f, 32f);
+        batch.setColor(1f, 1f, 1f, 1f);
 
         if (attackTime > 0f) {
             float p = 1f - attackTime / ATTACK_DUR;

@@ -16,6 +16,7 @@ import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 
 /**
@@ -24,6 +25,8 @@ import java.util.HashSet;
  * animasi, kamera mengikuti. Kendali: joystick tetap di kiri bawah layar
  * (sentuh + geser di separuh kiri layar) atau WASD / tombol panah;
  * tombol pedang di kanan bawah (atau spasi) untuk mengayunkan pedang.
+ * Slime berkeliaran di desa: mendeteksi pemain yang mendekat, mengejar,
+ * dan menyerang; pedang pemain bisa membunuhnya (3 ayunan).
  */
 public class NxRpgGame extends ApplicationAdapter {
 
@@ -38,6 +41,12 @@ public class NxRpgGame extends ApplicationAdapter {
     private Texture atkBtnTex;
     private float atkCenterX, atkCenterY, atkSize;
     private final boolean[] prevTouched = new boolean[10];
+    private boolean attackTriggered;
+
+    private final ArrayList<Enemy> enemies = new ArrayList<>();
+    private Texture heartFullTex, heartEmptyTex, whiteTex;
+    private float dmgFlash;
+    private int lastHp = Player.MAX_HP;
 
     private TiledMap map;
     private OrthogonalTiledMapRenderer mapRenderer;
@@ -83,6 +92,60 @@ public class NxRpgGame extends ApplicationAdapter {
         TiledMapTileLayer collision = (TiledMapTileLayer) map.getLayers().get("collision");
         // Muncul di tengah persimpangan jalan desa
         player = new Player(collision, mapPixelW / 2f, mapPixelH / 2f, mapPixelW, mapPixelH);
+
+        // Slime di tiga sudut desa (titik terverifikasi bebas dari tile padat)
+        enemies.add(new Enemy(collision, 104f, 56f, mapPixelW, mapPixelH));
+        enemies.add(new Enemy(collision, 456f, 56f, mapPixelW, mapPixelH));
+        enemies.add(new Enemy(collision, 296f, 360f, mapPixelW, mapPixelH));
+
+        heartFullTex = makeHeartTexture(true);
+        heartEmptyTex = makeHeartTexture(false);
+        whiteTex = makeWhiteTexture();
+    }
+
+    /** Ikon hati untuk HUD darah (digambar dari peta piksel). */
+    private Texture makeHeartTexture(boolean full) {
+        String[] rows = {
+                ".XX......XX.",
+                "XXXX....XXXX",
+                "XXXXXXXXXXXX",
+                "XWXXXXXXXXXX",
+                "XXXXXXXXXXXX",
+                ".XXXXXXXXXX.",
+                "..XXXXXXXX..",
+                "...XXXXXX...",
+                "....XXXX....",
+                ".....XX.....",
+        };
+        com.badlogic.gdx.graphics.Pixmap pm = new com.badlogic.gdx.graphics.Pixmap(
+                12, 10, com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
+        for (int r = 0; r < rows.length; r++) {
+            for (int c = 0; c < 12; c++) {
+                char ch = rows[r].charAt(c);
+                if (ch == '.') continue;
+                if (full) {
+                    pm.setColor(ch == 'W' ? com.badlogic.gdx.graphics.Color.WHITE
+                            : new com.badlogic.gdx.graphics.Color(226 / 255f, 58 / 255f, 70 / 255f, 1f));
+                } else {
+                    pm.setColor(52 / 255f, 54 / 255f, 66 / 255f, 1f);
+                }
+                pm.drawPixel(c, r);
+            }
+        }
+        Texture tex = new Texture(pm);
+        tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        return tex;
+    }
+
+    private Texture makeWhiteTexture() {
+        com.badlogic.gdx.graphics.Pixmap pm = new com.badlogic.gdx.graphics.Pixmap(
+                1, 1, com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
+        pm.setColor(com.badlogic.gdx.graphics.Color.WHITE);
+        pm.fill();
+        Texture tex = new Texture(pm);
+        pm.dispose();
+        return tex;
     }
 
     private void layoutJoystick() {
@@ -141,6 +204,28 @@ public class NxRpgGame extends ApplicationAdapter {
 
         readInput();
         player.update(delta, moveX, moveY);
+
+        // Ayunan pedang mengenai slime di busur depan pemain
+        if (attackTriggered) {
+            attackTriggered = false;
+            float fx = player.facing == Player.RIGHT ? 1f
+                    : player.facing == Player.LEFT ? -1f : 0f;
+            float fy = player.facing == Player.UP ? 1f
+                    : player.facing == Player.DOWN ? -1f : 0f;
+            for (Enemy e : enemies) e.tryHitBySword(player.x, player.y, fx, fy);
+        }
+        for (Enemy e : enemies) e.update(delta, player);
+
+        // Pemain pingsan: bangun lagi di persimpangan, slime kembali ke asal
+        if (player.hp < lastHp) dmgFlash = player.dead ? 0.6f : 0.35f;
+        lastHp = player.hp;
+        if (player.dead) {
+            player.respawn(mapPixelW / 2f, mapPixelH / 2f);
+            for (Enemy e : enemies) e.reset();
+            lastHp = player.hp;
+        }
+        if (dmgFlash > 0f) dmgFlash -= delta;
+
         updateCamera();
 
         Gdx.gl.glClearColor(0.08f, 0.12f, 0.08f, 1f);
@@ -151,6 +236,7 @@ public class NxRpgGame extends ApplicationAdapter {
 
         SpriteBatch batch = (SpriteBatch) mapRenderer.getBatch();
         batch.begin();
+        for (Enemy e : enemies) e.draw(batch);
         player.draw(batch);
         batch.end();
 
@@ -183,11 +269,17 @@ public class NxRpgGame extends ApplicationAdapter {
                 float ty = Gdx.graphics.getHeight() - Gdx.input.getY(p);
                 float ddx = tx - atkCenterX;
                 float ddy = ty - atkCenterY;
-                if (ddx * ddx + ddy * ddy <= atkR * atkR) player.attack();
+                if (ddx * ddx + ddy * ddy <= atkR * atkR) {
+                    player.attack();
+                    attackTriggered = true;
+                }
             }
             prevTouched[p] = t;
         }
-        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) player.attack();
+        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
+            player.attack();
+            attackTriggered = true;
+        }
 
         float dx = 0f, dy = 0f;
 
@@ -252,12 +344,34 @@ public class NxRpgGame extends ApplicationAdapter {
                 atkCenterX - atkSize / 2f, atkCenterY - atkSize / 2f,
                 atkSize, atkSize);
         uiBatch.setColor(1f, 1f, 1f, 1f);
+
+        // HUD darah: hati penuh/kosong di kiri atas
+        float density = Gdx.graphics.getDensity();
+        float heartSize = 22f * density;
+        float hx = 12f * density;
+        float hy = Gdx.graphics.getHeight() - 12f * density - heartSize;
+        for (int i = 0; i < Player.MAX_HP; i++) {
+            uiBatch.draw(i < player.hp ? heartFullTex : heartEmptyTex,
+                    hx + i * (heartSize + 5f * density), hy, heartSize, heartSize * 10f / 12f);
+        }
+
+        // Kilatan merah sesaat saat kena serangan
+        if (dmgFlash > 0f) {
+            uiBatch.setColor(0.85f, 0.1f, 0.1f, Math.min(0.4f, dmgFlash));
+            uiBatch.draw(whiteTex, 0f, 0f,
+                    Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+            uiBatch.setColor(1f, 1f, 1f, 1f);
+        }
         uiBatch.end();
     }
 
     @Override
     public void dispose() {
         player.dispose();
+        for (Enemy e : enemies) e.dispose();
+        heartFullTex.dispose();
+        heartEmptyTex.dispose();
+        whiteTex.dispose();
         mapRenderer.dispose();
         map.dispose();
         joyBaseTex.dispose();
