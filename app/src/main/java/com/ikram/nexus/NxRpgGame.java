@@ -13,7 +13,7 @@ import com.badlogic.gdx.maps.tiled.TiledMapTileSet;
 import com.badlogic.gdx.maps.tiled.TmxMapLoader;
 import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTile;
-import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
 import java.util.HashSet;
@@ -26,8 +26,8 @@ import java.util.HashSet;
  */
 public class NxRpgGame extends ApplicationAdapter {
 
-    private static final float VIEW_W = 320f;   // lebar dunia yang terlihat (piksel peta)
-    private static final float VIEW_H = 180f;
+    private static final float VIEW_W = 320f;   // lebar dunia minimum (piksel peta);
+    private static final float VIEW_H = 180f;   // layar lebih lebar -> peta terlihat lebih luas, tanpa garis hitam
 
     private OrthographicCamera camera;
     private Viewport viewport;
@@ -51,7 +51,7 @@ public class NxRpgGame extends ApplicationAdapter {
     @Override
     public void create() {
         camera = new OrthographicCamera();
-        viewport = new FitViewport(VIEW_W, VIEW_H, camera);
+        viewport = new ExtendViewport(VIEW_W, VIEW_H, camera);
         screenCam = new OrthographicCamera();
         uiBatch = new SpriteBatch();
 
@@ -122,11 +122,16 @@ public class NxRpgGame extends ApplicationAdapter {
     }
 
     private void updateCamera() {
+        float viewW = viewport.getWorldWidth();
+        float viewH = viewport.getWorldHeight();
         float cx = player.x;
         float cy = player.y + 16f;
-        // Jepit kamera supaya tidak keluar peta
-        cx = Math.max(VIEW_W / 2f, Math.min(cx, mapPixelW - VIEW_W / 2f));
-        cy = Math.max(VIEW_H / 2f, Math.min(cy, mapPixelH - VIEW_H / 2f));
+        // Jepit kamera supaya tidak keluar peta; kalau pandangan lebih besar
+        // dari peta di satu sumbu, kamera diam di tengah sumbu itu
+        cx = viewW >= mapPixelW ? mapPixelW / 2f
+                : Math.max(viewW / 2f, Math.min(cx, mapPixelW - viewW / 2f));
+        cy = viewH >= mapPixelH ? mapPixelH / 2f
+                : Math.max(viewH / 2f, Math.min(cy, mapPixelH - viewH / 2f));
         camera.position.set(cx, cy, 0f);
         camera.update();
     }
