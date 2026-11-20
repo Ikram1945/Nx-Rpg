@@ -22,8 +22,7 @@ import java.util.HashSet;
  * Nx RPG — tahap awal.
  * Peta desa dari Tiled (.tmx), pemain (kesatria) bisa jalan 4 arah dengan
  * animasi, kamera mengikuti. Kendali: joystick tetap di kiri bawah layar
- * (sentuh + geser di separuh kiri layar) atau WASD / tombol panah;
- * tombol pedang di kanan bawah (atau spasi) untuk mengayunkan pedang.
+ * (sentuh + geser di separuh kiri layar) atau WASD / tombol panah.
  */
 public class NxRpgGame extends ApplicationAdapter {
 
@@ -35,9 +34,6 @@ public class NxRpgGame extends ApplicationAdapter {
     private OrthographicCamera screenCam;       // khusus UI layar (joystick)
     private SpriteBatch uiBatch;
     private Texture joyBaseTex, joyKnobTex;
-    private Texture atkBtnTex;
-    private float atkCenterX, atkCenterY, atkSize;
-    private final boolean[] prevTouched = new boolean[10];
 
     private TiledMap map;
     private OrthogonalTiledMapRenderer mapRenderer;
@@ -61,7 +57,6 @@ public class NxRpgGame extends ApplicationAdapter {
 
         joyBaseTex = new Texture(Gdx.files.internal("ui/joy_base.png"));
         joyKnobTex = new Texture(Gdx.files.internal("ui/joy_knob.png"));
-        atkBtnTex = makeAttackButtonTexture();
         layoutJoystick();
 
         map = new TmxMapLoader().load("maps/village.tmx");
@@ -95,37 +90,6 @@ public class NxRpgGame extends ApplicationAdapter {
         joyCenterY = margin + joyBaseSize / 2f;
         knobX = joyCenterX;
         knobY = joyCenterY;
-        // Tombol pedang di kanan bawah, simetris dengan joystick
-        atkSize = 84f * density;
-        atkCenterX = Gdx.graphics.getWidth() - margin - atkSize / 2f;
-        atkCenterY = margin + atkSize / 2f;
-    }
-
-    /** Tekstur tombol pedang digambar dari kode (Pixmap): lingkaran baja
-     *  berisi ikon pedang diagonal. */
-    private Texture makeAttackButtonTexture() {
-        int s = 96;
-        com.badlogic.gdx.graphics.Pixmap pm =
-                new com.badlogic.gdx.graphics.Pixmap(s, s, com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
-        pm.setColor(0.55f, 0.62f, 0.72f, 0.95f);
-        pm.fillCircle(s / 2, s / 2, s / 2 - 1);
-        pm.setColor(0.07f, 0.08f, 0.12f, 0.78f);
-        pm.fillCircle(s / 2, s / 2, s / 2 - 7);
-        // Bilah: garis tebal dari gagang (kiri bawah) ke ujung (kanan atas)
-        pm.setColor(0.91f, 0.93f, 0.96f, 1f);
-        for (int i = -1; i <= 1; i++) pm.drawLine(37 + i, 59, 62 + i, 34);
-        // Pelindung emas, tegak lurus bilah di pangkalnya
-        pm.setColor(0.88f, 0.65f, 0.15f, 1f);
-        for (int i = 0; i <= 1; i++) pm.drawLine(32 + i, 54 + i, 41 + i, 63 + i);
-        // Gagang cokelat + bandul emas
-        pm.setColor(0.48f, 0.29f, 0.13f, 1f);
-        for (int i = -1; i <= 1; i++) pm.drawLine(35 + i, 61, 29 + i, 67);
-        pm.setColor(0.88f, 0.65f, 0.15f, 1f);
-        pm.fillCircle(27, 69, 3);
-        Texture tex = new Texture(pm);
-        tex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        pm.dispose();
-        return tex;
     }
 
     @Override
@@ -174,21 +138,6 @@ public class NxRpgGame extends ApplicationAdapter {
 
     /** Baca keyboard + joystick sentuh, hasil akhir di moveX/moveY (ternormalisasi). */
     private void readInput() {
-        // Tombol pedang: sentuhan baru (pointer mana pun) di dalam tombol
-        float atkR = atkSize * 0.6f;
-        for (int p = 0; p < prevTouched.length; p++) {
-            boolean t = Gdx.input.isTouched(p);
-            if (t && !prevTouched[p]) {
-                float tx = Gdx.input.getX(p);
-                float ty = Gdx.graphics.getHeight() - Gdx.input.getY(p);
-                float ddx = tx - atkCenterX;
-                float ddy = ty - atkCenterY;
-                if (ddx * ddx + ddy * ddy <= atkR * atkR) player.attack();
-            }
-            prevTouched[p] = t;
-        }
-        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) player.attack();
-
         float dx = 0f, dy = 0f;
 
         if (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.LEFT)) dx -= 1f;
@@ -246,11 +195,6 @@ public class NxRpgGame extends ApplicationAdapter {
         uiBatch.draw(joyKnobTex,
                 knobX - joyKnobSize / 2f, knobY - joyKnobSize / 2f,
                 joyKnobSize, joyKnobSize);
-        // Tombol pedang: menyala penuh selagi ayunan berjalan
-        uiBatch.setColor(1f, 1f, 1f, player.isAttacking() ? 1f : 0.8f);
-        uiBatch.draw(atkBtnTex,
-                atkCenterX - atkSize / 2f, atkCenterY - atkSize / 2f,
-                atkSize, atkSize);
         uiBatch.setColor(1f, 1f, 1f, 1f);
         uiBatch.end();
     }
@@ -262,7 +206,6 @@ public class NxRpgGame extends ApplicationAdapter {
         map.dispose();
         joyBaseTex.dispose();
         joyKnobTex.dispose();
-        atkBtnTex.dispose();
         uiBatch.dispose();
     }
 }
