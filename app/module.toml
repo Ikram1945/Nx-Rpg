@@ -1,0 +1,34 @@
+version = 2
+
+[module]
+type = "android-app"
+name = "app"
+languageLevel = "JAVA_17"
+output = "build/classes"
+
+[sourceSets.main]
+scope = "IMPLEMENTATION"
+java = ["src/main/java"]
+res = ["src/main/res"]
+
+[android]
+namespace = "com.ikram.nexus"
+compileSdk = 36
+minSdk = 26
+targetSdk = 34
+manifest = "src/main/AndroidManifest.xml"
+versionCode = 1
+versionName = "1.0"
+isApplication = true
+
+[build]
+dexMode = "auto"
+parallelDex = "false"
+javaExec = "inprocess"
+kotlinExec = "inprocess"
+kotlinWorkerHeapMb = 0
+
+dexMergeForks = 0
+
+[dependencies]
+implementation = ["com.badlogicgames.gdx:gdx:1.14.2", "com.badlogicgames.gdx:gdx-backend-android:1.14.2"]

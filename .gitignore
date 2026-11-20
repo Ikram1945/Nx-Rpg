@@ -1,0 +1,3 @@
+# Output build tidak dilacak Git (dibuat/dirawat ApkBuild)
+build/
+.gradle/
