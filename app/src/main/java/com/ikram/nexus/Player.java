@@ -38,9 +38,32 @@ public class Player {
         { { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "....BB....BB..W.", "...BB.....BB..W.", ".EE.......EE....", "EEE.......EEE..." }, { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "......BB.BB...W.", "......BB.BB...W.", "......EE.EE.....", ".....EEE.EEE...." }, { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "......BB.BB...W.", "......BBBB....W.", ".....EE....EE...", "...EEE.....EEE.." } }
     };
 
+    // Peta piksel pedang 16x16 (menghadap ke atas; gagang di bawah).
+    private static final String[] SWORD = {
+            "................",
+            ".......WW.......",
+            ".......WW.......",
+            ".......Ww.......",
+            ".......Ww.......",
+            ".......Ww.......",
+            ".......Ww.......",
+            ".......Ww.......",
+            ".......Ww.......",
+            ".......Ww.......",
+            "......GGGGG.....",
+            ".......HH.......",
+            ".......HH.......",
+            ".......HH.......",
+            "......GGGG......",
+            "................",
+    };
+    private static final float ATTACK_DUR = 0.22f;  // lama ayunan pedang (detik)
+
     private final Texture[][] textures = new Texture[4][3];
     private final Animation<TextureRegion>[] walk;
     private final TextureRegion[] idle = new TextureRegion[4];
+    private final Texture swordTex;
+    private final TextureRegion swordRegion;
     private final TiledMapTileLayer collision;
     private final float mapPixelW, mapPixelH;
 
@@ -48,6 +71,7 @@ public class Player {
     public int facing = DOWN;
     private float stateTime;
     private boolean moving;
+    private float attackTime;
 
     @SuppressWarnings("unchecked")
     public Player(TiledMapTileLayer collisionLayer, float startX, float startY,
@@ -86,6 +110,31 @@ public class Player {
             walk[dir].setPlayMode(Animation.PlayMode.LOOP);
             idle[dir] = regions[dir][1];
         }
+
+        // Tekstur pedang untuk ayunan, juga digambar dari peta piksel
+        Pixmap spm = new Pixmap(32, 32, Pixmap.Format.RGBA8888);
+        for (int row = 0; row < 16; row++) {
+            String line = SWORD[row];
+            for (int col = 0; col < 16; col++) {
+                char ch = line.charAt(col);
+                if (ch == '.') continue;
+                spm.setColor(colorOf(ch));
+                spm.drawPixel(8 + col, 8 + row);
+            }
+        }
+        swordTex = new Texture(spm);
+        swordTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        spm.dispose();
+        swordRegion = new TextureRegion(swordTex);
+    }
+
+    /** Mulai ayunan pedang (atau ulang dari awal kalau ditekan lagi). */
+    public void attack() {
+        attackTime = ATTACK_DUR;
+    }
+
+    public boolean isAttacking() {
+        return attackTime > 0f;
     }
 
     private static Color colorOf(char ch) {
@@ -111,6 +160,7 @@ public class Player {
 
     /** Gerakkan pemain; moveX/moveY dalam rentang -1..1. */
     public void update(float delta, float moveX, float moveY) {
+        if (attackTime > 0f) attackTime -= delta;
         moving = moveX != 0 || moveY != 0;
         if (!moving) {
             stateTime = 0f;
@@ -157,11 +207,32 @@ public class Player {
         // Kanvas gambar 32x32; kesatria 16x20 ada di tengah-bawahnya,
         // jadi gambar digeser 16 ke kiri dari titik kaki.
         batch.draw(frame, x - 16f, y, 32f, 32f);
+
+        if (attackTime > 0f) {
+            float p = 1f - attackTime / ATTACK_DUR;
+            float facingAngle = facing == RIGHT ? 0f
+                    : facing == UP ? 90f
+                    : facing == LEFT ? 180f : -90f;
+            // Ayunan menyapu dari +55 derajat ke -55 derajat dari arah hadap
+            float rot = facingAngle - 90f + (55f - 110f * p);
+            drawSword(batch, rot + 30f, 0.15f);  // bayangan ayunan
+            drawSword(batch, rot + 15f, 0.30f);
+            drawSword(batch, rot, 1f);
+            batch.setColor(1f, 1f, 1f, 1f);
+        }
+    }
+
+    private void drawSword(SpriteBatch batch, float rotation, float alpha) {
+        batch.setColor(1f, 1f, 1f, alpha);
+        // Poros di gagang pedang (16, 12 pada kanvas 32x32), ditaruh di
+        // titik tangan kesatria (x, y + 9)
+        batch.draw(swordRegion, x - 16f, y - 3f, 16f, 12f, 32f, 32f, 1f, 1f, rotation);
     }
 
     public void dispose() {
         for (Texture[] row : textures) {
             for (Texture t : row) t.dispose();
         }
+        swordTex.dispose();
     }
 }

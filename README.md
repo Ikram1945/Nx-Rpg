@@ -15,7 +15,9 @@ ApkBuild/CodeAssist satu modul (paket `com.ikram.nexus`).
 - Kendali:
   - **Sentuh**: joystick tetap di kiri bawah layar — sentuh di separuh kiri
     layar lalu geser, knob mengikuti arah geser.
-  - **Keyboard**: WASD atau tombol panah.
+  - **Serang**: tombol pedang di kanan bawah layar — kesatria mengayunkan
+    pedang ke arah hadapnya (dengan bayangan ayunan).
+  - **Keyboard**: WASD atau tombol panah untuk bergerak, spasi untuk menyerang.
 
 ## Struktur kode
 
