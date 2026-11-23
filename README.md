@@ -35,8 +35,12 @@ tapi masih tersimpan di `assets/`.
   "HP 100/100" di kiri atas (bar berubah hijau → kuning → merah).
   Kena serangan = kebal sesaat (berkedip). HP habis = game over, lalu
   mulai lagi sendiri dengan skor tertinggi tersimpan.
-- Gelombang makin rapat seiring waktu; gunner mulai muncul setelah
-  ±18 detik.
+- Gelombang makin rapat seiring waktu. Komposisi musuh tetap:
+  alien **ungu (drone) 70%**, alien **kuning (gunner) 30%**, dan bot
+  yang hidup bersamaan **dibatasi 7**. Di bawah bar HP ada tulisan
+  **"TOTAL HIDUP: N"** — jumlah semua yang masih hidup, termasuk
+  pesawatmu. Font HUD dihaluskan (filter Linear) supaya tidak lagi
+  tampil berpiksel.
 
 ## Kendali
 

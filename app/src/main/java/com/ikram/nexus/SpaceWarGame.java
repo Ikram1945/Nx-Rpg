@@ -53,6 +53,10 @@ public class SpaceWarGame extends ApplicationAdapter {
     // (pemain maupun musuh) 10, tabrakan badan 20 untuk kedua pihak.
     private static final int BULLET_DAMAGE = 10;
     private static final int RAM_DAMAGE = 20;
+    // Komposisi musuh: alien ungu (drone) 70%, alien kuning (gunner) 30%
+    private static final float PELUANG_KUNING = 0.30f;
+    // Bot musuh yang hidup bersamaan dibatasi segini
+    private static final int MAX_BOT_HIDUP = 7;
     private static final float ROCKET_LOCK_RANGE = 260f;
 
     private OrthographicCamera camera;
@@ -175,6 +179,12 @@ public class SpaceWarGame extends ApplicationAdapter {
         screenCam = new OrthographicCamera();
         uiBatch = new SpriteBatch();
         font = new BitmapFont();
+        // Font bawaan libGDX bertekstur piksel; haluskan tampilannya agar
+        // terlihat modern: filter Linear pada tekstur font + posisi gambar
+        // tidak dibulatkan ke piksel utuh.
+        font.getRegion().getTexture().setFilter(
+                Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        font.setUseIntegerPositions(false);
         try {
             whiteTex = makeWhiteTexture();
         } catch (Throwable abaikan) {
@@ -534,7 +544,7 @@ public class SpaceWarGame extends ApplicationAdapter {
         if (x > WORLD_W - 16f) x = WORLD_W - 16f;
         if (y < 16f) y = 16f;
         if (y > WORLD_H - 16f) y = WORLD_H - 16f;
-        int type = (elapsed > 18f && Math.random() < 0.22)
+        int type = (Math.random() < PELUANG_KUNING)
                 ? Enemy.GUNNER : Enemy.DRONE;
         enemies.add(new Enemy(type, x, y));
     }
@@ -830,7 +840,7 @@ public class SpaceWarGame extends ApplicationAdapter {
             // Gelombang musuh (maksimal 7 bot hidup bersamaan)
             spawnTimer -= delta;
             if (spawnTimer <= 0f) {
-                if (enemies.size() < 7) {
+                if (enemies.size() < MAX_BOT_HIDUP) {
                     spawnEnemy(viewW, viewH);
                     float interval = Math.max(0.42f, 1.05f - elapsed * 0.008f);
                     spawnTimer = interval * (0.7f + (float) Math.random() * 0.6f);
@@ -1170,6 +1180,14 @@ public class SpaceWarGame extends ApplicationAdapter {
         layout.setText(font, hpText);
         font.draw(uiBatch, hpText, hpBarX + 6f * density,
                 hpBarY + hpBarH / 2f + layout.height / 2f);
+
+        // Total semua yang masih hidup (pemain + seluruh bot musuh)
+        font.getData().setScale(1.1f * density);
+        font.setColor(0.85f, 0.95f, 1f, 1f);
+        int totalHidup = enemies.size() + (player.dead ? 0 : 1);
+        String hidupText = "TOTAL HIDUP: " + totalHidup;
+        font.draw(uiBatch, hidupText, hpBarX,
+                hpBarY - 10f * density);
 
         // Skor di kanan atas
         font.getData().setScale(1.7f * density);
