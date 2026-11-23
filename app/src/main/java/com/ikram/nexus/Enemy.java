@@ -246,8 +246,12 @@ public class Enemy {
         return damage(1);
     }
 
-    public boolean isGone() {
-        return x < -24f;
+    /** Musuh dibuang bila keluar batas dunia atau terlalu jauh dari pemain. */
+    public boolean isGone(float playerX, float playerY, float worldW, float worldH) {
+        if (x < -30f || x > worldW + 30f || y < -30f || y > worldH + 30f) return true;
+        float dx = x - playerX;
+        float dy = y - playerY;
+        return dx * dx + dy * dy > 320f * 320f;
     }
 
     public void draw(SpriteBatch batch) {

@@ -9,7 +9,13 @@ tapi masih tersimpan di `assets/`.
 
 ## Cara bermain
 
-- Pesawatmu melawan gelombang alien yang datang tanpa henti.
+- Arena pertempuran adalah **peta besar 1280x720** (16x luas layar) —
+  tidak terpotong: **kamera mengikuti pesawatmu** ke segala arah, peta
+  dibatasi garis perbatasan biru menyala + kisi samar, dan ada **peta
+  mini** di tengah atas yang menunjukkan seluruh peta, area pandang
+  kamera, posisimu (biru muda) dan posisi musuh (merah muda/merah).
+- Pesawatmu melawan gelombang alien yang datang tanpa henti; musuh
+  muncul tepat di luar pandangan kameramu dari tepi mana pun.
 - Semua pesawat — pemain maupun alien — **bisa berbelok ke segala
   arah**: badannya berputar mengikuti arah terbangnya, tidak terkunci
   menghadap satu sisi.
@@ -34,7 +40,12 @@ tapi masih tersimpan di `assets/`.
   pesawat berbelok mengikuti arah gerakmu.
 - **Tombol tembak** di kanan bawah: tahan untuk menembak terus; tembakan
   keluar ke **arah hadap pesawat**.
-- Di desktop: WASD / tombol panah untuk bergerak, SPASI untuk menembak.
+- **Tombol NOS** (oranye, ikon petir) tepat di atas tombol tembak:
+  ledakan kecepatan **2,1x selama 1,6 detik** dengan jejak cahaya di
+  ekor pesawat. Setelah dipakai ada **cooldown 4 detik** — tombol
+  tertutup sapuan gelap dan menampilkan angka detik yang tersisa.
+- Di desktop: WASD / tombol panah untuk bergerak, SPASI untuk menembak,
+  SHIFT untuk NOS.
 
 ## Penampil error (anti force close diam-diam)
 
@@ -51,8 +62,8 @@ tapi masih tersimpan di `assets/`.
   kode** (Pixmap -> Texture) sebagai gambar vektor halus — poligon + elips
   di kanvas besar lalu diperkecil bilinear — tanpa berkas gambar, karena
   rantai build di HP terbukti merusak tekstur PNG karakter.
-- Latar bintang paralaks 3 lapis + nebula lembut; ledakan partikel;
-  kilat merah saat kena.
+- Latar bintang paralaks 3 lapis + nebula lembut yang bergeser mengikuti
+  gerak kamera; ledakan partikel; kilat merah saat kena.
 - Berkas sumber (paket `com.ikram.nexus`):
   - `SpaceWarGame.java` — lingkup game, AI bot, tabrakan, HUD.
   - `Player.java` — pesawat pemain. `Enemy.java` — alien + mesin tembak.

@@ -31,8 +31,15 @@ public class SpaceWarGame extends ApplicationAdapter {
 
     private static final float VIEW_W = 320f;
     private static final float VIEW_H = 180f;
+    /** Ukuran dunia (peta) — jauh lebih besar dari layar; kamera mengikuti pemain. */
+    private static final float WORLD_W = 1280f;
+    private static final float WORLD_H = 720f;
     private static final float FIRE_INTERVAL = 0.14f;
     private static final float PLAYER_BULLET_SPEED = 300f;
+    // NOS (ledakan kecepatan untuk pemain): durasi, jeda isi ulang, pengali laju
+    private static final float NOS_DURATION = 1.6f;
+    private static final float NOS_COOLDOWN = 4f;
+    private static final float NOS_MULT = 2.1f;
 
     private OrthographicCamera camera;
     private Viewport viewport;
@@ -42,7 +49,7 @@ public class SpaceWarGame extends ApplicationAdapter {
     private BitmapFont font;
     private final GlyphLayout layout = new GlyphLayout();
 
-    private Texture joyBaseTex, joyKnobTex, fireBtnTex, whiteTex, softDotTex;
+    private Texture joyBaseTex, joyKnobTex, fireBtnTex, nosBtnTex, whiteTex, softDotTex;
     private Texture heartFullTex, heartEmptyTex;
 
     private Player player;
@@ -84,6 +91,17 @@ public class SpaceWarGame extends ApplicationAdapter {
     private int firePointer = -1;
     private float fireCenterX, fireCenterY, fireBtnSize;
     private boolean fireHeld = false;
+
+    // Tombol NOS (piksel layar) + keadaan ledakan kecepatan
+    private int nosPointer = -1;
+    private float nosCenterX, nosCenterY, nosBtnSize;
+    private boolean nosHeld = false;
+    private float nosTime;
+    private float nosCooldown;
+
+    // Kamera pengikut: titik tengah pandangan saat ini di dunia
+    private float camX, camY, prevCamX, prevCamY;
+    private boolean camInit;
 
     private static class Bullet {
         float x, y, vx, vy;
@@ -137,6 +155,7 @@ public class SpaceWarGame extends ApplicationAdapter {
         joyBaseTex = new Texture(Gdx.files.internal("ui/joy_base.png"));
         joyKnobTex = new Texture(Gdx.files.internal("ui/joy_knob.png"));
         fireBtnTex = makeFireButtonTexture();
+        nosBtnTex = makeNosButtonTexture();
         softDotTex = makeSoftDotTexture();
         heartFullTex = makeHeartTexture(true);
         heartEmptyTex = makeHeartTexture(false);
@@ -235,6 +254,10 @@ public class SpaceWarGame extends ApplicationAdapter {
         fireBtnSize = 92f * density;
         fireCenterX = Gdx.graphics.getWidth() - margin - fireBtnSize / 2f;
         fireCenterY = margin + fireBtnSize / 2f;
+        // Tombol NOS tepat di atas tombol tembak
+        nosBtnSize = 62f * density;
+        nosCenterX = fireCenterX;
+        nosCenterY = fireCenterY + fireBtnSize / 2f + 12f * density + nosBtnSize / 2f;
     }
 
     private void initStars(float viewW, float viewH) {
@@ -284,14 +307,45 @@ public class SpaceWarGame extends ApplicationAdapter {
         initStars(viewport.getWorldWidth(), viewport.getWorldHeight());
         initNebula(viewport.getWorldWidth(), viewport.getWorldHeight());
         if (player == null) {
-            player = new Player(viewport.getWorldWidth() * 0.22f, viewport.getWorldHeight() / 2f);
+            player = new Player(WORLD_W * 0.42f, WORLD_H / 2f);
         }
+    }
+
+    /** Tekstur tombol NOS: cincin oranye + ikon petir (label teks digambar HUD). */
+    private Texture makeNosButtonTexture() {
+        Pixmap pm = new Pixmap(96, 96, Pixmap.Format.RGBA8888);
+        for (int y = 0; y < 96; y++) {
+            for (int x = 0; x < 96; x++) {
+                double d = Math.sqrt((x - 47.5) * (x - 47.5) + (y - 47.5) * (y - 47.5));
+                if (d >= 41 && d <= 47) {
+                    pm.setColor(1f, 0.62f, 0.25f, 0.9f);
+                    pm.drawPixel(x, y);
+                } else if (d < 41) {
+                    pm.setColor(1f, 0.55f, 0.20f, 0.16f);
+                    pm.drawPixel(x, y);
+                }
+                // Ikon petir di tengah (poligon kasar per piksel)
+                boolean bolt = (x >= 52 && x <= 62 && y >= 18 && y <= 46)
+                        || (x >= 40 && x <= 56 && y >= 42 && y <= 52)
+                        || (x >= 36 && x <= 46 && y >= 48 && y <= 76);
+                if (bolt) {
+                    pm.setColor(1f, 0.80f, 0.35f, 1f);
+                    pm.drawPixel(x, y);
+                }
+            }
+        }
+        Texture t = new Texture(pm);
+        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        pm.dispose();
+        return t;
     }
 
     private void readInput() {
         moveX = 0f;
         moveY = 0f;
         fireHeld = Gdx.input.isKeyPressed(Input.Keys.SPACE);
+        nosHeld = Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)
+                || Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT);
 
         if (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.LEFT)) moveX -= 1f;
         if (Gdx.input.isKeyPressed(Input.Keys.D) || Gdx.input.isKeyPressed(Input.Keys.RIGHT)) moveX += 1f;
@@ -303,6 +357,7 @@ public class SpaceWarGame extends ApplicationAdapter {
             if (!Gdx.input.isTouched(i)) {
                 if (joyPointer == i) { joyPointer = -1; joyActive = false; }
                 if (firePointer == i) { firePointer = -1; }
+                if (nosPointer == i) { nosPointer = -1; }
                 continue;
             }
             float sx = Gdx.input.getX(i);
@@ -313,18 +368,27 @@ public class SpaceWarGame extends ApplicationAdapter {
             // lain" — JANGAN mensyaratkan slot lain kosong juga, karena pemain
             // hampir selalu menahan joystick sambil menembak; syarat lama
             // membuat tombol tembak tidak merespons selama joystick ditahan.
-            if (firePointer == -1 && joyPointer != i) {
+            if (firePointer == -1 && joyPointer != i && nosPointer != i) {
                 float fdx = sx - fireCenterX;
                 float fdy = sy - fireCenterY;
                 if (Math.sqrt(fdx * fdx + fdy * fdy) <= fireBtnSize * 0.85f) {
                     firePointer = i;
                 }
             }
-            if (joyPointer == -1 && firePointer != i && sx < Gdx.graphics.getWidth() * 0.55f) {
+            if (nosPointer == -1 && joyPointer != i && firePointer != i) {
+                float ndx = sx - nosCenterX;
+                float ndy = sy - nosCenterY;
+                if (Math.sqrt(ndx * ndx + ndy * ndy) <= nosBtnSize * 0.85f) {
+                    nosPointer = i;
+                }
+            }
+            if (joyPointer == -1 && firePointer != i && nosPointer != i
+                    && sx < Gdx.graphics.getWidth() * 0.55f) {
                 joyPointer = i;
                 joyActive = true;
             }
             if (firePointer == i) fireHeld = true;
+            if (nosPointer == i) nosHeld = true;
             if (joyPointer == i) {
                 float dx = sx - joyCenterX;
                 float dy = sy - joyCenterY;
@@ -347,11 +411,34 @@ public class SpaceWarGame extends ApplicationAdapter {
         }
     }
 
+    /** Musuh muncul tepat di luar pandangan kamera (tepi acak), di dalam dunia. */
     private void spawnEnemy(float viewW, float viewH) {
-        float y = 18f + (float) Math.random() * (viewH - 36f);
+        float left = camX - viewW / 2f;
+        float bottom = camY - viewH / 2f;
+        float x;
+        float y;
+        double sisi = Math.random();
+        if (sisi < 0.40) {          // kanan (paling sering)
+            x = left + viewW + 26f;
+            y = bottom + (float) Math.random() * viewH;
+        } else if (sisi < 0.60) {   // atas
+            x = left + (float) Math.random() * viewW;
+            y = bottom + viewH + 26f;
+        } else if (sisi < 0.80) {   // bawah
+            x = left + (float) Math.random() * viewW;
+            y = bottom - 26f;
+        } else {                    // kiri
+            x = left - 26f;
+            y = bottom + (float) Math.random() * viewH;
+        }
+        // Jepit ke dalam dunia (dekat perbatasan dunia titik bisa terlihat)
+        if (x < 16f) x = 16f;
+        if (x > WORLD_W - 16f) x = WORLD_W - 16f;
+        if (y < 16f) y = 16f;
+        if (y > WORLD_H - 16f) y = WORLD_H - 16f;
         int type = (elapsed > 18f && Math.random() < 0.22)
                 ? Enemy.GUNNER : Enemy.DRONE;
-        enemies.add(new Enemy(type, viewW + 24f, y));
+        enemies.add(new Enemy(type, x, y));
     }
 
     /**
@@ -497,7 +584,10 @@ public class SpaceWarGame extends ApplicationAdapter {
         elapsed = 0f;
         spawnTimer = 0.8f;
         fireTimer = 0f;
-        player.respawn(viewW * 0.22f, viewH / 2f);
+        nosTime = 0f;
+        nosCooldown = 0f;
+        player.respawn(WORLD_W * 0.42f, WORLD_H / 2f);
+        camInit = false; // kamera langsung melompat ke pemain
         state = STATE_PLAY;
     }
 
@@ -551,7 +641,32 @@ public class SpaceWarGame extends ApplicationAdapter {
 
         if (state == STATE_PLAY) {
             elapsed += delta;
-            player.update(delta, moveX, moveY, viewW, viewH);
+
+            // NOS: tekan tombol/SHIFT saat jeda habis -> ledakan kecepatan
+            // 1,6 detik (laju 2,1x), lalu jeda isi ulang 4 detik.
+            if (nosCooldown > 0f) nosCooldown -= delta;
+            if (nosTime > 0f) {
+                nosTime -= delta;
+                if (nosTime <= 0f) nosCooldown = NOS_COOLDOWN;
+            } else if (nosHeld && nosCooldown <= 0f && !player.dead) {
+                nosTime = NOS_DURATION;
+            }
+            player.speedScale = nosTime > 0f ? NOS_MULT : 1f;
+            player.update(delta, moveX, moveY, WORLD_W, WORLD_H);
+            // Jejak asap cahaya di ekor pesawat selama NOS menyala
+            if (nosTime > 0f && !player.dead) {
+                float rad = (float) Math.toRadians(player.facing);
+                float tx = player.x - (float) Math.cos(rad) * 15f;
+                float ty = player.y - (float) Math.sin(rad) * 15f;
+                for (int i = 0; i < 2; i++) {
+                    particles.add(new Particle(
+                            tx + (float) (Math.random() * 4f - 2f),
+                            ty + (float) (Math.random() * 4f - 2f),
+                            -(float) Math.cos(rad) * 22f + (float) (Math.random() * 8f - 4f),
+                            -(float) Math.sin(rad) * 22f + (float) (Math.random() * 8f - 4f),
+                            0.32f, 2.2f, 0.55f, 0.85f, 1f));
+                }
+            }
 
             // Menembak (tahan tombol / spasi)
             fireTimer -= delta;
@@ -577,20 +692,19 @@ public class SpaceWarGame extends ApplicationAdapter {
 
             // Musuh: AI memilih sasaran & mengemudi, lalu bergerak & menembak
             for (Enemy e : enemies) {
-                updateEnemyAi(e, delta, viewW, viewH);
-                e.update(delta, viewW, viewH);
-                boolean engaged = e.hasTarget && e.targetDist <= 205f
-                        && e.x < viewW - 4f && e.x > 4f;
+                updateEnemyAi(e, delta, WORLD_W, WORLD_H);
+                e.update(delta, WORLD_W, WORLD_H);
+                boolean engaged = e.hasTarget && e.targetDist <= 205f;
                 if (e.updateFire(delta, engaged)) {
                     spawnEnemyBullet(e);
                 }
             }
 
-            // Peluru bergerak
+            // Peluru bergerak (dibuang bila keluar dunia)
             for (Bullet b : bullets) {
                 b.x += b.vx * delta;
                 b.y += b.vy * delta;
-                if (b.x < -12f || b.x > viewW + 12f || b.y < -12f || b.y > viewH + 12f) {
+                if (b.x < -16f || b.x > WORLD_W + 16f || b.y < -16f || b.y > WORLD_H + 16f) {
                     b.dead = true;
                 }
             }
@@ -620,7 +734,7 @@ public class SpaceWarGame extends ApplicationAdapter {
                     eit.remove();
                     continue;
                 }
-                if (e.isGone()) {
+                if (e.isGone(player.x, player.y, WORLD_W, WORLD_H)) {
                     eit.remove();
                     continue;
                 }
@@ -676,10 +790,53 @@ public class SpaceWarGame extends ApplicationAdapter {
             for (Enemy e : enemies) {
                 e.vx = -e.cruise;
                 e.vy = 0f;
-                e.update(delta, viewW, viewH);
+                e.update(delta, WORLD_W, WORLD_H);
             }
             overTimer -= delta;
             if (overTimer <= 0f) resetRun(viewW, viewH);
+        }
+
+        // Kamera mengikuti pemain (dijepit ke batas dunia) + paralaks latar:
+        // bintang & nebula digeser berlawanan arah gerak kamera sesuai
+        // kedalaman lapisannya, jadi latar terasa jauh di belakang dunia.
+        if (player != null && state == STATE_PLAY) {
+            float targetX = Math.max(viewW / 2f, Math.min(WORLD_W - viewW / 2f, player.x));
+            float targetY = Math.max(viewH / 2f, Math.min(WORLD_H - viewH / 2f, player.y));
+            if (!camInit) {
+                camX = targetX;
+                camY = targetY;
+                prevCamX = camX;
+                prevCamY = camY;
+                camInit = true;
+            } else {
+                float ikuti = Math.min(1f, 7f * delta);
+                camX += (targetX - camX) * ikuti;
+                camY += (targetY - camY) * ikuti;
+            }
+            float geserX = camX - prevCamX;
+            float geserY = camY - prevCamY;
+            prevCamX = camX;
+            prevCamY = camY;
+            if (geserX != 0f || geserY != 0f) {
+                for (float[] s : stars) {
+                    float faktor = s[2] / 26f * 0.75f;
+                    s[0] -= geserX * faktor;
+                    s[1] -= geserY * faktor;
+                    if (s[0] < -3f) s[0] += viewW + 6f;
+                    if (s[0] > viewW + 3f) s[0] -= viewW + 6f;
+                    if (s[1] < -3f) s[1] += viewH + 6f;
+                    if (s[1] > viewH + 3f) s[1] -= viewH + 6f;
+                }
+                for (float[] nb : nebula) {
+                    nb[0] -= geserX * 0.12f;
+                    nb[1] -= geserY * 0.12f;
+                    if (nb[0] < -nb[3]) nb[0] += viewW + nb[3] * 2f;
+                    if (nb[0] > viewW + nb[3]) nb[0] -= viewW + nb[3] * 2f;
+                    if (nb[1] < -nb[3]) nb[1] += viewH + nb[3] * 2f;
+                    if (nb[1] > viewH + nb[3]) nb[1] -= viewH + nb[3] * 2f;
+                }
+            }
+            camera.position.set(camX, camY, 0f);
         }
 
         // Partikel ledakan
@@ -719,14 +876,33 @@ public class SpaceWarGame extends ApplicationAdapter {
         camera.update();
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
+        // Latar digambar relatif terhadap sudut pandangan kamera (paralaks
+        // sudah diterapkan pada posisi simpannya di renderGame).
+        float camKiri = camera.position.x - viewW / 2f;
+        float camBawah = camera.position.y - viewH / 2f;
         for (float[] nb : nebula) {
             batch.setColor(nb[4], nb[5], nb[6], nb[7]);
-            batch.draw(softDotTex, nb[0] - nb[3], nb[1] - nb[3], nb[3] * 2f, nb[3] * 2f);
+            batch.draw(softDotTex, camKiri + nb[0] - nb[3], camBawah + nb[1] - nb[3],
+                    nb[3] * 2f, nb[3] * 2f);
         }
         for (float[] s : stars) {
             batch.setColor(1f, 1f, 1f, s[4]);
-            batch.draw(whiteTex, s[0], s[1], s[3], s[3]);
+            batch.draw(whiteTex, camKiri + s[0], camBawah + s[1], s[3], s[3]);
         }
+        // Kisi peta samar + garis perbatasan dunia yang menyala, supaya
+        // pemain melihat luas & batas peta (tidak terpotong tanpa petunjuk).
+        batch.setColor(0.55f, 0.85f, 1f, 0.05f);
+        for (float gx = 80f; gx < WORLD_W; gx += 80f) {
+            batch.draw(whiteTex, gx, 0f, 0.6f, WORLD_H);
+        }
+        for (float gy = 80f; gy < WORLD_H; gy += 80f) {
+            batch.draw(whiteTex, 0f, gy, WORLD_W, 0.6f);
+        }
+        batch.setColor(0.45f, 0.85f, 1f, 0.55f);
+        batch.draw(whiteTex, 0f, 0f, WORLD_W, 1.4f);
+        batch.draw(whiteTex, 0f, WORLD_H - 1.4f, WORLD_W, 1.4f);
+        batch.draw(whiteTex, 0f, 0f, 1.4f, WORLD_H);
+        batch.draw(whiteTex, WORLD_W - 1.4f, 0f, 1.4f, WORLD_H);
         batch.setColor(1f, 1f, 1f, 1f);
         for (Bullet b : bullets) {
             if (b.friendly) {
@@ -801,6 +977,68 @@ public class SpaceWarGame extends ApplicationAdapter {
                 fireBtnSize, fireBtnSize);
         uiBatch.setColor(1f, 1f, 1f, 1f);
 
+        // Tombol NOS: menyala terang saat aktif; selama jeda isi ulang
+        // tertutup sapuan gelap dari atas + angka detik yang tersisa.
+        if (nosTime > 0f) uiBatch.setColor(1f, 0.72f, 0.38f, 1f);
+        else uiBatch.setColor(1f, 1f, 1f, nosCooldown > 0f ? 0.6f : 0.9f);
+        uiBatch.draw(nosBtnTex, nosCenterX - nosBtnSize / 2f, nosCenterY - nosBtnSize / 2f,
+                nosBtnSize, nosBtnSize);
+        uiBatch.setColor(1f, 1f, 1f, 1f);
+        if (nosCooldown > 0f) {
+            float sisa = nosCooldown / NOS_COOLDOWN;
+            float tinggiSapuan = nosBtnSize * sisa;
+            uiBatch.setColor(0f, 0f, 0f, 0.55f);
+            uiBatch.draw(nosBtnTex, nosCenterX - nosBtnSize / 2f,
+                    nosCenterY + nosBtnSize / 2f - tinggiSapuan, nosBtnSize, tinggiSapuan,
+                    0, 0, 96, Math.max(1, (int) (96f * sisa)), false, false);
+            uiBatch.setColor(1f, 1f, 1f, 1f);
+            font.getData().setScale(1.05f * density);
+            font.setColor(1f, 0.85f, 0.6f, 1f);
+            String detik = String.format(Locale.US, "%.1f", nosCooldown);
+            layout.setText(font, detik);
+            font.draw(uiBatch, detik, nosCenterX - layout.width / 2f,
+                    nosCenterY + layout.height / 2f);
+        } else {
+            font.getData().setScale(0.85f * density);
+            font.setColor(1f, 0.82f, 0.55f, 1f);
+            layout.setText(font, "NOS");
+            font.draw(uiBatch, "NOS", nosCenterX - layout.width / 2f,
+                    nosCenterY - nosBtnSize / 2f + 13f * density);
+        }
+
+        // Peta mini (tengah atas): seluruh dunia, bingkai area pandang
+        // kamera, titik musuh (drone merah muda, gunner merah) & pemain.
+        float petaW = 104f * density;
+        float petaH = petaW * WORLD_H / WORLD_W;
+        float petaX = (screenW - petaW) / 2f;
+        float petaY = screenH - 10f * density - petaH;
+        uiBatch.setColor(0.35f, 0.75f, 1f, 0.5f);
+        uiBatch.draw(whiteTex, petaX - 1.5f, petaY - 1.5f, petaW + 3f, petaH + 3f);
+        uiBatch.setColor(0.02f, 0.04f, 0.10f, 0.72f);
+        uiBatch.draw(whiteTex, petaX, petaY, petaW, petaH);
+        float skalaPeta = petaW / WORLD_W;
+        uiBatch.setColor(1f, 1f, 1f, 0.45f);
+        float vwX = petaX + (camera.position.x - viewW / 2f) * skalaPeta;
+        float vwY = petaY + (camera.position.y - viewH / 2f) * skalaPeta;
+        float vwW = viewW * skalaPeta;
+        float vwH = viewH * skalaPeta;
+        uiBatch.draw(whiteTex, vwX, vwY, vwW, 1f);
+        uiBatch.draw(whiteTex, vwX, vwY + vwH - 1f, vwW, 1f);
+        uiBatch.draw(whiteTex, vwX, vwY, 1f, vwH);
+        uiBatch.draw(whiteTex, vwX + vwW - 1f, vwY, 1f, vwH);
+        float titikM = 2.4f * density;
+        for (Enemy e : enemies) {
+            if (e.type == Enemy.GUNNER) uiBatch.setColor(1f, 0.38f, 0.30f, 0.95f);
+            else uiBatch.setColor(0.95f, 0.45f, 0.90f, 0.95f);
+            uiBatch.draw(whiteTex, petaX + e.x * skalaPeta - titikM / 2f,
+                    petaY + e.y * skalaPeta - titikM / 2f, titikM, titikM);
+        }
+        float titikP = 3.4f * density;
+        uiBatch.setColor(0.55f, 0.95f, 1f, 1f);
+        uiBatch.draw(whiteTex, petaX + player.x * skalaPeta - titikP / 2f,
+                petaY + player.y * skalaPeta - titikP / 2f, titikP, titikP);
+        uiBatch.setColor(1f, 1f, 1f, 1f);
+
         // Tulisan GAME OVER
         if (state == STATE_OVER) {
             font.getData().setScale(3.2f * density);
@@ -831,6 +1069,7 @@ public class SpaceWarGame extends ApplicationAdapter {
         if (joyBaseTex != null) joyBaseTex.dispose();
         if (joyKnobTex != null) joyKnobTex.dispose();
         if (fireBtnTex != null) fireBtnTex.dispose();
+        if (nosBtnTex != null) nosBtnTex.dispose();
         if (whiteTex != null) whiteTex.dispose();
         if (softDotTex != null) softDotTex.dispose();
         if (heartFullTex != null) heartFullTex.dispose();

@@ -28,6 +28,8 @@ public class Player {
     public float x, y;
     /** Arah hadap pesawat dalam derajat (0 = kanan, CCW). */
     public float facing;
+    /** Pengali kecepatan gerak (diatur game; > 1 saat NOS aktif). */
+    public float speedScale = 1f;
     public int hp = MAX_HP;
     public boolean dead;
     private float invulnTime;
@@ -109,8 +111,8 @@ public class Player {
             float nx = mx / len;
             float ny = my / len;
             float mag = Math.min(1f, len);
-            x += nx * SPEED * mag * delta;
-            y += ny * SPEED * mag * delta;
+            x += nx * SPEED * speedScale * mag * delta;
+            y += ny * SPEED * speedScale * mag * delta;
             // Badan berputar mengikuti arah gerak
             float target = (float) Math.toDegrees(Math.atan2(ny, nx));
             facing = SpriteArt.turnToward(facing, target, TURN_RATE * delta);
