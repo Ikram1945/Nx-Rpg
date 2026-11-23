@@ -19,18 +19,22 @@ tapi masih tersimpan di `assets/`.
 - Semua pesawat — pemain maupun alien — **bisa berbelok ke segala
   arah**: badannya berputar mengikuti arah terbangnya, tidak terkunci
   menghadap satu sisi.
-- **Drone** (ungu, si keroco): cepat & lincah, 2 darah, menembak
+- **Drone** (ungu, si keroco): cepat & lincah, HP 20, menembak
   beruntun 3x, 100 poin.
-- **Gunner** (merah): lambat & tebal, 5 darah, tembakan tunggal
+- **Gunner** (merah): lambat & tebal, HP 50, tembakan tunggal
   terarah, 250 poin.
 - Semua musuh adalah **bot AI**: mereka memilih lawan terdekat — bisa
   kamu, bisa alien lain (sesama alien saling serang!) — lalu menjaga
   jarak tempur sambil menyamping dan menembak sasarannya. Musuh yang
-  terluka menampilkan bar darah di atas pesawatnya. Skor hanya didapat
-  dari musuh yang kamu hancurkan sendiri.
-- Darahmu 3 hati. Kena peluru/tabrakan = -1 hati + kebal sesaat (berkedip).
-  Hati habis = game over, lalu mulai lagi sendiri dengan skor tertinggi
-  tersimpan.
+  terluka menampilkan **bar darah + angka sisa HP** di atas pesawatnya.
+  Skor hanya didapat dari musuh yang kamu hancurkan sendiri.
+- **Semua HP memakai sistem angka** (tidak ada lagi ikon hati), dan
+  semua damage adalah angka TETAP yang tercatat — tidak pernah acak:
+  peluru (pemain & musuh) **10**, tabrakan badan **20**, roket **20**
+  (+ percikan **10**). Darahmu **100**, tampil sebagai bar + tulisan
+  "HP 100/100" di kiri atas (bar berubah hijau → kuning → merah).
+  Kena serangan = kebal sesaat (berkedip). HP habis = game over, lalu
+  mulai lagi sendiri dengan skor tertinggi tersimpan.
 - Gelombang makin rapat seiring waktu; gunner mulai muncul setelah
   ±18 detik.
 
@@ -65,7 +69,7 @@ tapi masih tersimpan di `assets/`.
 
 ## Catatan teknis
 
-- Semua sprite (pesawat, drone, gunner, hati) digambar **prosedural dari
+- Semua sprite (pesawat, drone, gunner) digambar **prosedural dari
   kode** (Pixmap -> Texture) sebagai gambar vektor halus — poligon + elips
   di kanvas besar lalu diperkecil bilinear — tanpa berkas gambar, karena
   rantai build di HP terbukti merusak tekstur PNG karakter.

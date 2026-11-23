@@ -46,9 +46,13 @@ public class SpaceWarGame extends ApplicationAdapter {
     private static final float ROCKET_SPEED = 215f;
     private static final float ROCKET_TURN = 300f;   // derajat per detik
     private static final float ROCKET_LIFE = 4f;
-    private static final int ROCKET_DAMAGE = 2;
+    private static final int ROCKET_DAMAGE = 20;
     private static final float ROCKET_SPLASH_RADIUS = 30f;
-    private static final int ROCKET_SPLASH_DAMAGE = 1;
+    private static final int ROCKET_SPLASH_DAMAGE = 10;
+    // Tabel kerusakan TETAP (tercatat, tidak pernah acak): semua peluru
+    // (pemain maupun musuh) 10, tabrakan badan 20 untuk kedua pihak.
+    private static final int BULLET_DAMAGE = 10;
+    private static final int RAM_DAMAGE = 20;
     private static final float ROCKET_LOCK_RANGE = 260f;
 
     private OrthographicCamera camera;
@@ -61,7 +65,6 @@ public class SpaceWarGame extends ApplicationAdapter {
 
     private Texture joyBaseTex, joyKnobTex, fireBtnTex, nosBtnTex, rocketBtnTex, rocketTex, whiteTex, softDotTex;
     private TextureRegion rocketRegion;
-    private Texture heartFullTex, heartEmptyTex;
 
     private Player player;
     private final ArrayList<Enemy> enemies = new ArrayList<>();
@@ -197,8 +200,6 @@ public class SpaceWarGame extends ApplicationAdapter {
         rocketTex = makeRocketTexture();
         rocketRegion = new TextureRegion(rocketTex);
         softDotTex = makeSoftDotTexture();
-        heartFullTex = makeHeartTexture(true);
-        heartEmptyTex = makeHeartTexture(false);
 
         prefs = Gdx.app.getPreferences("nx_space");
         hiScore = prefs.getInteger("hi", 0);
@@ -222,28 +223,6 @@ public class SpaceWarGame extends ApplicationAdapter {
                 if (d < 1.0) {
                     float a = (float) Math.pow(1.0 - d, 2.0);
                     pm.setColor(1f, 1f, 1f, a);
-                    pm.drawPixel(x, y);
-                }
-            }
-        }
-        Texture t = new Texture(pm);
-        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        pm.dispose();
-        return t;
-    }
-
-    /** Hati halus dari kurva implisit hati (bukan piksel kotak-kotak lagi). */
-    private Texture makeHeartTexture(boolean full) {
-        Pixmap pm = new Pixmap(48, 40, Pixmap.Format.RGBA8888);
-        for (int y = 0; y < 40; y++) {
-            for (int x = 0; x < 48; x++) {
-                double nx = (x - 23.5) / 15.5;
-                double ny = (19.5 - y) / 15.5 + 0.25;
-                double f = Math.pow(nx * nx + ny * ny - 1.0, 3) - nx * nx * Math.pow(ny, 3);
-                if (f < 0.35) {
-                    float a = (float) Math.min(1.0, Math.max(0.0, (0.35 - f) / 0.7));
-                    if (full) pm.setColor(0.93f, 0.26f, 0.31f, a);
-                    else pm.setColor(0.32f, 0.34f, 0.44f, a);
                     pm.drawPixel(x, y);
                 }
             }
@@ -889,7 +868,7 @@ public class SpaceWarGame extends ApplicationAdapter {
                     float rr = e.radius + 3f;
                     if (dx * dx + dy * dy < rr * rr) {
                         b.dead = true;
-                        if (e.hit()) e.killedByPlayer = true;
+                        if (e.damage(BULLET_DAMAGE)) e.killedByPlayer = true;
                         break;
                     }
                 }
@@ -968,20 +947,20 @@ public class SpaceWarGame extends ApplicationAdapter {
                     eit.remove();
                     continue;
                 }
-                // Tabrakan badan musuh vs pesawat: musuh rusak berat (2),
-                // pemain -1 hati. Gunner yang tebal bisa selamat dari tabrakan.
+                // Tabrakan badan musuh vs pesawat: kedua pihak kena
+                // RAM_DAMAGE. Gunner yang tebal bisa selamat dari tabrakan.
                 if (!player.dead && !player.isInvulnerable()) {
                     float dx = e.x - player.x;
                     float dy = e.y - player.y;
                     float rr = e.radius + Player.RADIUS;
                     if (dx * dx + dy * dy < rr * rr) {
-                        if (e.damage(2)) {
+                        if (e.damage(RAM_DAMAGE)) {
                             e.killedByPlayer = true;
                             explosion(e.x, e.y, e.type == Enemy.GUNNER);
                             score += e.scoreValue;
                             eit.remove();
                         }
-                        if (player.takeDamage()) onPlayerHit(viewW, viewH);
+                        if (player.damage(RAM_DAMAGE)) onPlayerHit(viewW, viewH);
                     }
                 }
             }
@@ -995,7 +974,7 @@ public class SpaceWarGame extends ApplicationAdapter {
                     float rr = Player.RADIUS + 3f;
                     if (dx * dx + dy * dy < rr * rr) {
                         b.dead = true;
-                        if (player.takeDamage()) onPlayerHit(viewW, viewH);
+                        if (player.damage(BULLET_DAMAGE)) onPlayerHit(viewW, viewH);
                         continue;
                     }
                 }
@@ -1006,7 +985,7 @@ public class SpaceWarGame extends ApplicationAdapter {
                     float rr = e.radius + 3f;
                     if (dx * dx + dy * dy < rr * rr) {
                         b.dead = true;
-                        e.damage(1); // hancurnya disapu pada iterasi musuh berikutnya
+                        e.damage(BULLET_DAMAGE); // hancurnya disapu pada iterasi musuh berikutnya
                         break;
                     }
                 }
@@ -1152,7 +1131,7 @@ public class SpaceWarGame extends ApplicationAdapter {
             batch.draw(rocketRegion, r.x - 15f, r.y - 6f, 15f, 6f,
                     30f, 12f, 1f, 1f, r.angle);
         }
-        for (Enemy e : enemies) e.draw(batch);
+        for (Enemy e : enemies) e.draw(batch, font, layout, WORLD_H);
         player.draw(batch);
         for (Particle p : particles) {
             float a = Math.max(0f, p.life / p.maxLife);
@@ -1170,14 +1149,27 @@ public class SpaceWarGame extends ApplicationAdapter {
         float screenW = Gdx.graphics.getWidth();
         float screenH = Gdx.graphics.getHeight();
 
-        // Hati di kiri atas
-        float heartW = 22f * density;
-        float heartH = 18f * density;
-        for (int i = 0; i < Player.MAX_HP; i++) {
-            Texture t = i < player.hp ? heartFullTex : heartEmptyTex;
-            uiBatch.draw(t, 14f * density + i * (heartW + 5f * density),
-                    screenH - 14f * density - heartH, heartW, heartH);
-        }
+        // Bar darah pemain + angka HP di kiri atas (menggantikan ikon hati)
+        float hpBarW = 124f * density;
+        float hpBarH = 14f * density;
+        float hpBarX = 14f * density;
+        float hpBarY = screenH - 14f * density - hpBarH;
+        float fracHp = Math.max(0f, (float) player.hp / (float) Player.MAX_HP);
+        uiBatch.setColor(0f, 0f, 0f, 0.55f);
+        uiBatch.draw(whiteTex, hpBarX - 2f, hpBarY - 2f, hpBarW + 4f, hpBarH + 4f);
+        uiBatch.setColor(0.10f, 0.13f, 0.20f, 0.9f);
+        uiBatch.draw(whiteTex, hpBarX, hpBarY, hpBarW, hpBarH);
+        if (fracHp > 0.5f) uiBatch.setColor(0.35f, 0.90f, 0.55f, 0.95f);
+        else if (fracHp > 0.25f) uiBatch.setColor(0.95f, 0.80f, 0.30f, 0.95f);
+        else uiBatch.setColor(0.95f, 0.35f, 0.30f, 0.95f);
+        uiBatch.draw(whiteTex, hpBarX, hpBarY, hpBarW * fracHp, hpBarH);
+        uiBatch.setColor(1f, 1f, 1f, 1f);
+        font.getData().setScale(0.95f * density);
+        font.setColor(1f, 1f, 1f, 1f);
+        String hpText = "HP " + player.hp + "/" + Player.MAX_HP;
+        layout.setText(font, hpText);
+        font.draw(uiBatch, hpText, hpBarX + 6f * density,
+                hpBarY + hpBarH / 2f + layout.height / 2f);
 
         // Skor di kanan atas
         font.getData().setScale(1.7f * density);
@@ -1337,8 +1329,6 @@ public class SpaceWarGame extends ApplicationAdapter {
         if (rocketTex != null) rocketTex.dispose();
         if (whiteTex != null) whiteTex.dispose();
         if (softDotTex != null) softDotTex.dispose();
-        if (heartFullTex != null) heartFullTex.dispose();
-        if (heartEmptyTex != null) heartEmptyTex.dispose();
         if (player != null) player.dispose();
         Enemy.disposeShared();
     }

@@ -16,7 +16,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
  */
 public class Player {
 
-    public static final int MAX_HP = 3;
+    public static final int MAX_HP = 100;
     public static final float SPEED = 118f;
     public static final float RADIUS = 7f;
     /** Kecepatan berputar badan pesawat (derajat per detik). */
@@ -134,10 +134,14 @@ public class Player {
 
     public boolean isInvulnerable() { return invulnTime > 0f; }
 
-    /** Kena serangan: darah berkurang, kebal sesaat. Return true bila serangan masuk. */
-    public boolean takeDamage() {
+    /**
+     * Kena serangan sebesar amount (angka tetap dari tabel kerusakan di
+     * SpaceWarGame): darah berkurang, kebal sesaat. Return true bila
+     * serangan masuk.
+     */
+    public boolean damage(int amount) {
         if (dead || invulnTime > 0f) return false;
-        hp--;
+        hp -= amount;
         invulnTime = 1.2f;
         if (hp <= 0) {
             hp = 0;

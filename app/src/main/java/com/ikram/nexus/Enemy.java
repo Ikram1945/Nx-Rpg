@@ -3,6 +3,8 @@ package com.ikram.nexus;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 
@@ -14,8 +16,8 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
  * arah sasarannya. Badannya BERBELOK mengikuti arah terbangnya
  * (facing, derajat; 0 = kanan). Punya darah seperti pemain dan bar
  * darah digambar di atas pesawatnya begitu darah berkurang.
- *   DRONE  (keroco): cepat & lincah, 2 darah, tembakan beruntun 3x.
- *   GUNNER (besar) : lambat & tebal, 5 darah, tembakan tunggal terarah.
+ *   DRONE  (keroco): cepat & lincah, HP 20, tembakan beruntun 3x.
+ *   GUNNER (besar) : lambat & tebal, HP 50, tembakan tunggal terarah.
  * Sprite digambar prosedural sebagai gambar vektor halus lewat
  * SpriteArt; tekstur dipakai bersama oleh semua musuh (statis).
  * Posisi x/y adalah titik TENGAH pesawat. Otak AI (pemilihan sasaran
@@ -166,7 +168,7 @@ public class Enemy {
         retargetTimer = (float) Math.random() * 0.5f;
         strafeDir = Math.random() < 0.5 ? -1 : 1;
         if (type == GUNNER) {
-            hp = maxHp = 5;
+            hp = maxHp = 50;
             radius = 10.5f;
             scoreValue = 250;
             maxSpeed = 46f;
@@ -175,7 +177,7 @@ public class Enemy {
             turnRate = 210f;
             fireCooldown = 1.0f + (float) Math.random() * 1.2f;
         } else {
-            hp = maxHp = 2;
+            hp = maxHp = 20;
             radius = 8f;
             scoreValue = 100;
             maxSpeed = 82f;
@@ -241,11 +243,6 @@ public class Enemy {
         return hp <= 0;
     }
 
-    /** Kena satu peluru. */
-    public boolean hit() {
-        return damage(1);
-    }
-
     /** Musuh dibuang bila keluar batas dunia atau terlalu jauh dari pemain. */
     public boolean isGone(float playerX, float playerY, float worldW, float worldH) {
         if (x < -30f || x > worldW + 30f || y < -30f || y > worldH + 30f) return true;
@@ -254,7 +251,7 @@ public class Enemy {
         return dx * dx + dy * dy > 320f * 320f;
     }
 
-    public void draw(SpriteBatch batch) {
+    public void draw(SpriteBatch batch, BitmapFont font, GlyphLayout layout, float worldH) {
         if (flashTime > 0f) {
             batch.setColor(1f, 0.45f, 0.45f, 1f);
         }
@@ -269,18 +266,33 @@ public class Enemy {
                     15f, 15f, 30f, 30f, 1f, 1f, rot);
         }
         batch.setColor(1f, 1f, 1f, 1f);
-        // Bar darah (tidak ikut berputar), muncul begitu darah berkurang;
-        // dekat tepi atas dunia (tinggi 180) bar pindah ke bawah pesawat
+        // Bar darah + angka HP (tidak ikut berputar), muncul begitu darah
+        // berkurang; dekat tepi atas dunia bar & angka pindah ke bawah
+        // pesawat supaya tidak keluar peta.
         if (hp < maxHp && hp > 0) {
+            boolean diBawah = y > worldH - 22f;
             float barW = radius * 2f;
             float barX = x - barW / 2f;
-            float barY = y > 158f ? y - radius - 13f : y + radius + 9.5f;
+            float barY = diBawah ? y - radius - 13f : y + radius + 9.5f;
             float frac = (float) hp / (float) maxHp;
             batch.setColor(0f, 0f, 0f, 0.55f);
             batch.draw(whiteTex, barX - 0.6f, barY - 0.6f, barW + 1.2f, 3.6f);
             batch.setColor(Math.min(1f, 1.7f * (1f - frac)), Math.min(1f, 1.7f * frac), 0.15f, 0.95f);
             batch.draw(whiteTex, barX, barY, barW * frac, 2.4f);
             batch.setColor(1f, 1f, 1f, 1f);
+            // Angka sisa HP persis di sisi luar bar
+            if (font != null && layout != null) {
+                float skalaLama = font.getData().scaleX;
+                font.getData().setScale(0.30f);
+                String teks = String.valueOf(hp);
+                layout.setText(font, teks);
+                font.setColor(1f, 1f, 1f, 0.95f);
+                float teksY = diBawah ? barY - 1.2f - layout.height : barY + 4.8f;
+                font.draw(batch, teks, x - layout.width / 2f, teksY);
+                font.getData().setScale(skalaLama);
+                font.setColor(1f, 1f, 1f, 1f);
+                batch.setColor(1f, 1f, 1f, 1f);
+            }
         }
     }
 }
