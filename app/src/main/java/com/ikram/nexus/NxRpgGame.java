@@ -30,7 +30,7 @@ public class NxRpgGame extends ApplicationAdapter {
     private static final float VIEW_W = 320f;
     private static final float VIEW_H = 180f;
     private static final float FIRE_INTERVAL = 0.14f;
-    private static final float PLAYER_BULLET_SPEED = 260f;
+    private static final float PLAYER_BULLET_SPEED = 300f;
     private static final float ENEMY_BULLET_SPEED = 78f;
 
     private OrthographicCamera camera;
@@ -41,7 +41,7 @@ public class NxRpgGame extends ApplicationAdapter {
     private BitmapFont font;
     private final GlyphLayout layout = new GlyphLayout();
 
-    private Texture joyBaseTex, joyKnobTex, fireBtnTex, whiteTex;
+    private Texture joyBaseTex, joyKnobTex, fireBtnTex, whiteTex, softDotTex;
     private Texture heartFullTex, heartEmptyTex;
 
     private Player player;
@@ -51,6 +51,9 @@ public class NxRpgGame extends ApplicationAdapter {
 
     // Bintang latar: 3 lapis paralaks [x, y, kecepatan, ukuran, terang]
     private final ArrayList<float[]> stars = new ArrayList<>();
+
+    // Nebula: gumpalan cahaya lembut raksasa [x, y, kecepatan, ukuran, r, g, b, alfa]
+    private final ArrayList<float[]> nebula = new ArrayList<>();
 
     private Preferences prefs;
     private int score;
@@ -111,6 +114,7 @@ public class NxRpgGame extends ApplicationAdapter {
         joyKnobTex = new Texture(Gdx.files.internal("ui/joy_knob.png"));
         fireBtnTex = makeFireButtonTexture();
         whiteTex = makeWhiteTexture();
+        softDotTex = makeSoftDotTexture();
         heartFullTex = makeHeartTexture(true);
         heartEmptyTex = makeHeartTexture(false);
 
@@ -127,29 +131,43 @@ public class NxRpgGame extends ApplicationAdapter {
         return t;
     }
 
-    private Texture makeHeartTexture(boolean full) {
-        String[] rows = {
-                ".XXX...XXX.",
-                "XXXXX.XXXXX",
-                "XXXXXXXXXXX",
-                "XXXXXXXXXXX",
-                ".XXXXXXXXX.",
-                "..XXXXXXX..",
-                "...XXXXX...",
-                "....XXX....",
-                ".....X.....",
-        };
-        Pixmap pm = new Pixmap(11, 9, Pixmap.Format.RGBA8888);
-        for (int row = 0; row < 9; row++) {
-            for (int col = 0; col < 11; col++) {
-                if (rows[row].charAt(col) != 'X') continue;
-                if (full) pm.setColor(0.92f, 0.25f, 0.30f, 1f);
-                else pm.setColor(0.30f, 0.32f, 0.42f, 1f);
-                pm.drawPixel(col, row);
+    /** Titik cahaya lembut (gradasi radial) untuk nebula, pijar peluru, partikel. */
+    private Texture makeSoftDotTexture() {
+        Pixmap pm = new Pixmap(64, 64, Pixmap.Format.RGBA8888);
+        for (int y = 0; y < 64; y++) {
+            for (int x = 0; x < 64; x++) {
+                double d = Math.sqrt((x - 31.5) * (x - 31.5) + (y - 31.5) * (y - 31.5)) / 32.0;
+                if (d < 1.0) {
+                    float a = (float) Math.pow(1.0 - d, 2.0);
+                    pm.setColor(1f, 1f, 1f, a);
+                    pm.drawPixel(x, y);
+                }
             }
         }
         Texture t = new Texture(pm);
-        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        pm.dispose();
+        return t;
+    }
+
+    /** Hati halus dari kurva implisit hati (bukan piksel kotak-kotak lagi). */
+    private Texture makeHeartTexture(boolean full) {
+        Pixmap pm = new Pixmap(48, 40, Pixmap.Format.RGBA8888);
+        for (int y = 0; y < 40; y++) {
+            for (int x = 0; x < 48; x++) {
+                double nx = (x - 23.5) / 15.5;
+                double ny = (19.5 - y) / 15.5 + 0.25;
+                double f = Math.pow(nx * nx + ny * ny - 1.0, 3) - nx * nx * Math.pow(ny, 3);
+                if (f < 0.35) {
+                    float a = (float) Math.min(1.0, Math.max(0.0, (0.35 - f) / 0.7));
+                    if (full) pm.setColor(0.93f, 0.26f, 0.31f, a);
+                    else pm.setColor(0.32f, 0.34f, 0.44f, a);
+                    pm.drawPixel(x, y);
+                }
+            }
+        }
+        Texture t = new Texture(pm);
+        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         pm.dispose();
         return t;
     }
@@ -212,12 +230,30 @@ public class NxRpgGame extends ApplicationAdapter {
         }
     }
 
+    private void initNebula(float viewW, float viewH) {
+        nebula.clear();
+        float[][] tints = {
+                {0.30f, 0.28f, 0.75f}, {0.16f, 0.55f, 0.65f},
+                {0.55f, 0.25f, 0.70f}, {0.25f, 0.35f, 0.85f}};
+        for (int i = 0; i < 4; i++) {
+            float[] t = tints[i];
+            nebula.add(new float[]{
+                    (float) Math.random() * viewW,
+                    (float) Math.random() * viewH,
+                    2f + (float) Math.random() * 2.5f,
+                    90f + (float) Math.random() * 80f,
+                    t[0], t[1], t[2],
+                    0.05f + (float) Math.random() * 0.04f});
+        }
+    }
+
     @Override
     public void resize(int width, int height) {
         viewport.update(width, height, true);
         screenCam.setToOrtho(false, width, height);
         layoutJoystick();
         initStars(viewport.getWorldWidth(), viewport.getWorldHeight());
+        initNebula(viewport.getWorldWidth(), viewport.getWorldHeight());
         if (player == null) {
             player = new Player(viewport.getWorldWidth() * 0.22f, viewport.getWorldHeight() / 2f);
         }
@@ -244,14 +280,18 @@ public class NxRpgGame extends ApplicationAdapter {
             float sy = screenH - Gdx.input.getY(i);
             // Sentuhan yang belum punya peran ditentukan dari posisinya:
             // dekat tombol tembak -> penembak, separuh kiri layar -> joystick.
-            if (joyPointer == -1 && firePointer != i) {
+            // Syaratnya hanya "slotku kosong & sentuhan ini bukan milik peran
+            // lain" — JANGAN mensyaratkan slot lain kosong juga, karena pemain
+            // hampir selalu menahan joystick sambil menembak; syarat lama
+            // membuat tombol tembak tidak merespons selama joystick ditahan.
+            if (firePointer == -1 && joyPointer != i) {
                 float fdx = sx - fireCenterX;
                 float fdy = sy - fireCenterY;
-                if (Math.sqrt(fdx * fdx + fdy * fdy) <= fireBtnSize * 0.62f) {
+                if (Math.sqrt(fdx * fdx + fdy * fdy) <= fireBtnSize * 0.85f) {
                     firePointer = i;
                 }
             }
-            if (firePointer == -1 && joyPointer == -1 && sx < Gdx.graphics.getWidth() * 0.55f) {
+            if (joyPointer == -1 && firePointer != i && sx < Gdx.graphics.getWidth() * 0.55f) {
                 joyPointer = i;
                 joyActive = true;
             }
@@ -334,6 +374,14 @@ public class NxRpgGame extends ApplicationAdapter {
             if (s[0] < -3f) {
                 s[0] = viewW + 3f;
                 s[1] = (float) Math.random() * viewH;
+            }
+        }
+        // Nebula melayang lebih lambat di belakang bintang
+        for (float[] nb : nebula) {
+            nb[0] -= nb[2] * delta;
+            if (nb[0] < -nb[3]) {
+                nb[0] = viewW + nb[3];
+                nb[1] = (float) Math.random() * viewH;
             }
         }
 
@@ -487,6 +535,10 @@ public class NxRpgGame extends ApplicationAdapter {
         camera.update();
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
+        for (float[] nb : nebula) {
+            batch.setColor(nb[4], nb[5], nb[6], nb[7]);
+            batch.draw(softDotTex, nb[0] - nb[3], nb[1] - nb[3], nb[3] * 2f, nb[3] * 2f);
+        }
         for (float[] s : stars) {
             batch.setColor(1f, 1f, 1f, s[4]);
             batch.draw(whiteTex, s[0], s[1], s[3], s[3]);
@@ -494,13 +546,13 @@ public class NxRpgGame extends ApplicationAdapter {
         batch.setColor(1f, 1f, 1f, 1f);
         for (Bullet b : bullets) {
             if (b.friendly) {
-                batch.setColor(0.45f, 0.85f, 1f, 0.35f);
-                batch.draw(whiteTex, b.x - 6f, b.y - 2.5f, 12f, 5f);
+                batch.setColor(0.45f, 0.85f, 1f, 0.50f);
+                batch.draw(softDotTex, b.x - 8f, b.y - 8f, 16f, 16f);
                 batch.setColor(0.85f, 0.98f, 1f, 1f);
                 batch.draw(whiteTex, b.x - 3.5f, b.y - 1f, 7f, 2f);
             } else {
-                batch.setColor(1f, 0.40f, 0.85f, 0.35f);
-                batch.draw(whiteTex, b.x - 4.5f, b.y - 4.5f, 9f, 9f);
+                batch.setColor(1f, 0.40f, 0.85f, 0.55f);
+                batch.draw(softDotTex, b.x - 7.5f, b.y - 7.5f, 15f, 15f);
                 batch.setColor(1f, 0.65f, 0.95f, 1f);
                 batch.draw(whiteTex, b.x - 2f, b.y - 2f, 4f, 4f);
             }
@@ -510,8 +562,9 @@ public class NxRpgGame extends ApplicationAdapter {
         player.draw(batch);
         for (Particle p : particles) {
             float a = Math.max(0f, p.life / p.maxLife);
-            batch.setColor(p.r, p.g, p.b, a);
-            batch.draw(whiteTex, p.x - p.size / 2f, p.y - p.size / 2f, p.size, p.size);
+            float s = p.size * 2.6f;
+            batch.setColor(p.r, p.g, p.b, a * 0.9f);
+            batch.draw(softDotTex, p.x - s / 2f, p.y - s / 2f, s, s);
         }
         batch.setColor(1f, 1f, 1f, 1f);
         batch.end();
@@ -538,13 +591,13 @@ public class NxRpgGame extends ApplicationAdapter {
         String scoreText = "SCORE " + String.format(Locale.US, "%06d", score);
         layout.setText(font, scoreText);
         font.draw(uiBatch, scoreText, screenW - 14f * density - layout.width,
-                screenH - 12f * density);
+                screenH - 26f * density);
         font.getData().setScale(1.1f * density);
         font.setColor(0.75f, 0.85f, 1f, 1f);
         String hiText = "HI " + String.format(Locale.US, "%06d", hiScore);
         layout.setText(font, hiText);
         font.draw(uiBatch, hiText, screenW - 14f * density - layout.width,
-                screenH - 44f * density);
+                screenH - 54f * density);
 
         // Kilat merah saat kena serangan
         if (hitFlash > 0f) {
@@ -591,6 +644,7 @@ public class NxRpgGame extends ApplicationAdapter {
         joyKnobTex.dispose();
         fireBtnTex.dispose();
         whiteTex.dispose();
+        softDotTex.dispose();
         heartFullTex.dispose();
         heartEmptyTex.dispose();
         player.dispose();

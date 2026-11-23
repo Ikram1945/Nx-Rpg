@@ -26,8 +26,9 @@ tapi masih tersimpan di `assets/`).
 ## Catatan teknis
 
 - Semua sprite (pesawat, drone, gunner, hati) digambar **prosedural dari
-  peta piksel** di dalam kode (Pixmap -> Texture) — tanpa berkas gambar,
-  karena rantai build di HP terbukti merusak tekstur PNG karakter.
+  kode** (Pixmap -> Texture) sebagai gambar vektor halus — poligon + elips
+  di kanvas besar lalu diperkecil bilinear — tanpa berkas gambar, karena
+  rantai build di HP terbukti merusak tekstur PNG karakter.
 - Latar bintang paralaks 3 lapis; ledakan partikel; kilat merah saat kena.
 - Tiga berkas sumber utama: `NxRpgGame.java` (lingkup game + HUD),
   `Player.java` (pesawat pemain), `Enemy.java` (alien).
