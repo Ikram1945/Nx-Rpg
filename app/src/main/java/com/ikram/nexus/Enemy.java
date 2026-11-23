@@ -32,6 +32,10 @@ public class Enemy {
      *  Hanya SATU dalam setiap permainan — kemunculan & senjatanya
      *  diatur SpaceWarGame. */
     public static final int MOTHERSHIP = 2;
+    /** Alien roket (hijau): menjaga jarak dan menembakkan MINI ROKET
+     *  auto-aim (pengejar) ke sasarannya — peluncuran & roketnya
+     *  diatur SpaceWarGame. */
+    public static final int ROCKETEER = 3;
 
     private static Texture[] sharedTextures;
     private static TextureRegion[] sharedRegions;
@@ -39,12 +43,13 @@ public class Enemy {
 
     private static void ensureTextures() {
         if (sharedTextures != null) return;
-        sharedTextures = new Texture[3];
-        sharedRegions = new TextureRegion[3];
+        sharedTextures = new Texture[4];
+        sharedRegions = new TextureRegion[4];
         sharedTextures[DRONE] = buildDroneTexture();
         sharedTextures[GUNNER] = buildGunnerTexture();
         sharedTextures[MOTHERSHIP] = buildMothershipTexture();
-        for (int i = 0; i < 3; i++) {
+        sharedTextures[ROCKETEER] = buildRocketeerTexture();
+        for (int i = 0; i < 4; i++) {
             sharedRegions[i] = new TextureRegion(sharedTextures[i]);
         }
         Pixmap pm = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
@@ -178,6 +183,46 @@ public class Enemy {
         return SpriteArt.toTexture(pm);
     }
 
+    // ---------- Alien roket: piring hijau + dua roket siap tembak ----------
+
+    private static Texture buildRocketeerTexture() {
+        Pixmap pm = new Pixmap(256, 192, Pixmap.Format.RGBA8888);
+        Color outline = SpriteArt.col(26, 52, 30, 1f);
+        // Cahaya bawah badan
+        SpriteArt.fillEllipse(pm, 128, 130, 64, 12, SpriteArt.col(120, 255, 140, 0.28f));
+        // Cakram hijau: tepi gelap, isi, kilau atas
+        SpriteArt.fillEllipse(pm, 128, 100, 94, 35, outline);
+        SpriteArt.fillEllipse(pm, 128, 97, 90, 32, SpriteArt.col(56, 148, 66, 1f));
+        SpriteArt.fillEllipse(pm, 128, 90, 82, 25, SpriteArt.col(92, 196, 104, 1f));
+        SpriteArt.fillEllipse(pm, 110, 82, 40, 10, SpriteArt.col(255, 255, 255, 0.18f));
+        // Kubah kemudi hijau muda
+        SpriteArt.fillEllipse(pm, 140, 74, 27, 18, outline);
+        SpriteArt.fillEllipse(pm, 140, 72, 23, 15, SpriteArt.col(178, 240, 150, 1f));
+        SpriteArt.fillEllipse(pm, 132, 66, 8, 5, SpriteArt.col(255, 255, 255, 0.9f));
+        // Dua mini roket terpasang di atas & bawah, hidung ke KIRI
+        gambarRoketKecil(pm, 66, 48);
+        gambarRoketKecil(pm, 66, 140);
+        // Lampu-lampu kecil
+        SpriteArt.fillEllipse(pm, 182, 96, 5, 5, SpriteArt.col(255, 90, 70, 1f));
+        SpriteArt.fillEllipse(pm, 88, 102, 4, 4, SpriteArt.col(220, 255, 160, 1f));
+        return SpriteArt.toTexture(pm);
+    }
+
+    /** Mini roket horizontal: badan terang, hidung oranye ke kiri, sirip hijau. */
+    private static void gambarRoketKecil(Pixmap pm, float cx, float cy) {
+        Color outline = SpriteArt.col(26, 52, 30, 1f);
+        SpriteArt.fillEllipse(pm, cx, cy, 31, 9, outline);
+        SpriteArt.fillEllipse(pm, cx + 2, cy, 28, 7, SpriteArt.col(224, 230, 238, 1f));
+        // Hidung menunjuk KIRI
+        SpriteArt.fillPoly(pm, new float[]{cx - 46, cy, cx - 27, cy - 8, cx - 27, cy + 8},
+                SpriteArt.col(240, 120, 40, 1f));
+        // Sirip ekor atas & bawah
+        SpriteArt.fillPoly(pm, new float[]{cx + 20, cy - 4, cx + 33, cy - 13, cx + 25, cy - 1},
+                SpriteArt.col(56, 148, 66, 1f));
+        SpriteArt.fillPoly(pm, new float[]{cx + 20, cy + 4, cx + 33, cy + 13, cx + 25, cy + 1},
+                SpriteArt.col(56, 148, 66, 1f));
+    }
+
     // ---------- Keadaan bot ----------
 
     public final int type;
@@ -246,6 +291,16 @@ public class Enemy {
             prefRange = 145f;
             turnRate = 210f;
             fireCooldown = 1.0f + (float) Math.random() * 1.2f;
+        } else if (type == ROCKETEER) {
+            hp = maxHp = 35;
+            radius = 9.5f;
+            scoreValue = 175;
+            coinValue = 18;
+            maxSpeed = 55f;
+            cruise = 32f;
+            prefRange = 175f;
+            turnRate = 260f;
+            fireCooldown = 1.2f + (float) Math.random() * 1.2f;
         } else {
             hp = maxHp = 20;
             radius = 8f;
@@ -307,6 +362,20 @@ public class Enemy {
         return false;
     }
 
+    /**
+     * Khusus alien roket: dipanggil tiap frame; return true tepat pada
+     * frame sebuah mini roket harus diluncurkan (game yang membuat &
+     * mengemudikan roketnya). Jeda antar luncuran 2,6-3,4 detik.
+     */
+    public boolean siapRoket(float delta, boolean engaged) {
+        if (fireCooldown > 0f) fireCooldown -= delta;
+        if (engaged && fireCooldown <= 0f) {
+            fireCooldown = 2.6f + (float) Math.random() * 0.8f;
+            return true;
+        }
+        return false;
+    }
+
     /** Terima kerusakan. Return true bila musuh hancur. */
     public boolean damage(int amount) {
         hp -= amount;
@@ -335,6 +404,9 @@ public class Enemy {
         } else if (type == GUNNER) {
             batch.draw(sharedRegions[type], x - 19f, y - 14.25f,
                     19f, 14.25f, 38f, 28.5f, 1f, 1f, rot);
+        } else if (type == ROCKETEER) {
+            batch.draw(sharedRegions[type], x - 20f, y - 15f,
+                    20f, 15f, 40f, 30f, 1f, 1f, rot);
         } else {
             batch.draw(sharedRegions[type], x - 15f, y - 15f,
                     15f, 15f, 30f, 30f, 1f, 1f, rot);

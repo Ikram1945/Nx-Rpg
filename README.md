@@ -46,6 +46,10 @@ sekarang kembali ke menu utama (tidak lagi mulai sendiri).
   beruntun 3x, 100 poin.
 - **Gunner** (merah): lambat & tebal, HP 50, tembakan tunggal
   terarah, 250 poin.
+- **Alien Roket** (hijau): HP 35, menjaga jarak dan menembakkan
+  **mini roket auto-aim** — roket pengejar yang berbelok memburu
+  sasarannya (damage **15**) setiap ±3 detik, maks 2 roket aktif
+  per penembak. 175 poin, 18 koin.
 - **Kapal induk** (boss raksasa): hanya **SATU dalam setiap
   permainan**, muncul sekali setelah ±45 detik dengan peringatan
   "KAPAL INDUK MENDEKAT!". HP **500**, 2000 poin. Senjatanya:
@@ -68,13 +72,15 @@ sekarang kembali ke menu utama (tidak lagi mulai sendiri).
 - **Semua HP memakai sistem angka** (tidak ada lagi ikon hati), dan
   semua damage adalah angka TETAP yang tercatat — tidak pernah acak:
   peluru (pemain & musuh) **10**, tabrakan badan **20**, roket **20**
-  (+ percikan **10**). Darahmu **200**, tampil sebagai bar + tulisan
+  (+ percikan **10**), mini roket alien **15**. Darahmu **200**,
+  tampil sebagai bar + tulisan
   "HP 200/200" di kiri atas (bar berubah hijau → kuning → merah).
   Kena serangan = kebal sesaat (berkedip). HP habis = game over, lalu
-  mulai lagi sendiri dengan skor tertinggi tersimpan.
+  kembali ke menu utama dengan skor tertinggi tersimpan.
 - Gelombang makin rapat seiring waktu. Komposisi musuh tetap:
-  alien **ungu (drone) 70%**, alien **kuning (gunner) 30%**, dan bot
-  yang hidup bersamaan **dibatasi 7**. Di bawah bar HP ada tulisan
+  alien **ungu (drone) 55%**, alien **kuning (gunner) 30%**, alien
+  **hijau (roket) 15%**, dan bot
+  yang hidup bersamaan **dibatasi 8**. Di bawah bar HP ada tulisan
   **"TOTAL HIDUP: N"** — jumlah semua yang masih hidup, termasuk
   pesawatmu. Font HUD dihaluskan (filter Linear) supaya tidak lagi
   tampil berpiksel.
@@ -94,8 +100,8 @@ sekarang kembali ke menu utama (tidak lagi mulai sendiri).
 - **Tombol roket / RKT** (merah, ikon roket) di kiri tombol tembak:
   meluncurkan **roket pemburu auto-aim** — mengunci musuh terdekat dan
   mengejarnya sambil berbelok, dengan jejak asap. Ledakannya besar:
-  sasaran utama kena 2 damage (drone langsung hancur) dan musuh dalam
-  radius percikan kena 1 damage. Bila sasarannya gugur di tengah jalan,
+  sasaran utama kena 20 damage (drone langsung hancur) dan musuh dalam
+  radius percikan kena 10 damage. Bila sasarannya gugur di tengah jalan,
   roket mengunci musuh terdekat lain. **Cooldown 5 detik** dengan
   indikator sapuan + angka detik seperti tombol NOS.
 - Di desktop: WASD / tombol panah untuk bergerak, SPASI untuk menembak,

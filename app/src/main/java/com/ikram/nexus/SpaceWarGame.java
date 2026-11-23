@@ -55,8 +55,16 @@ public class SpaceWarGame extends ApplicationAdapter {
     private static final int RAM_DAMAGE = 20;
     // Komposisi musuh: alien ungu (drone) 70%, alien kuning (gunner) 30%
     private static final float PELUANG_KUNING = 0.30f;
+    private static final float PELUANG_ROKET = 0.15f;
+    // Mini roket pengejar milik alien roket (auto-aim, damage tercatat)
+    private static final int MINI_ROCKET_DAMAGE = 15;
+    private static final float MINI_ROCKET_SPEED = 150f;
+    private static final float MINI_ROCKET_TURN = 200f;
+    private static final float MINI_ROCKET_LIFE = 3.2f;
+    private static final float MINI_ROCKET_RANGE = 280f;
+    private static final int MINI_ROCKET_MAX_PER = 2;
     // Bot musuh yang hidup bersamaan dibatasi segini
-    private static final int MAX_BOT_HIDUP = 7;
+    private static final int MAX_BOT_HIDUP = 8;
     // Kapal induk (boss): hanya SATU dalam setiap permainan, muncul
     // sekali setelah permainan berjalan BOSS_SPAWN_TIME detik
     private static final float BOSS_SPAWN_TIME = 45f;
@@ -85,12 +93,15 @@ public class SpaceWarGame extends ApplicationAdapter {
 
     private Texture joyBaseTex, joyKnobTex, fireBtnTex, nosBtnTex, rocketBtnTex, rocketTex, whiteTex, softDotTex;
     private TextureRegion rocketRegion;
+    private Texture miniRocketTex;
+    private TextureRegion miniRocketRegion;
 
     private Player player;
     private Partner partner;
     private final ArrayList<Enemy> enemies = new ArrayList<>();
     private final ArrayList<Bullet> bullets = new ArrayList<>();
     private final ArrayList<Rocket> rockets = new ArrayList<>();
+    private final ArrayList<MiniRocket> miniRockets = new ArrayList<>();
     private final ArrayList<Bomb> bombs = new ArrayList<>();
     private Texture bombTex;
     // Keadaan partner
@@ -235,6 +246,25 @@ public class SpaceWarGame extends ApplicationAdapter {
         }
     }
 
+    /** Mini roket pengejar milik alien roket: memburu sasarannya (auto-aim). */
+    private static class MiniRocket {
+        float x, y, angle;
+        float life = MINI_ROCKET_LIFE;
+        Enemy pemilik;
+        Enemy targetMusuh;
+        boolean targetPemain;
+        boolean dead;
+        MiniRocket(float x, float y, float angle, Enemy pemilik,
+                   Enemy targetMusuh, boolean targetPemain) {
+            this.x = x;
+            this.y = y;
+            this.angle = angle;
+            this.pemilik = pemilik;
+            this.targetMusuh = targetMusuh;
+            this.targetPemain = targetPemain;
+        }
+    }
+
     /** Bom tekanan tinggi kapal induk: meluncur ke titik sasaran lalu meledak beradius besar. */
     private static class Bomb {
         float x, y, targetX, targetY, time;
@@ -295,6 +325,8 @@ public class SpaceWarGame extends ApplicationAdapter {
         rocketBtnTex = makeRocketButtonTexture();
         rocketTex = makeRocketTexture();
         rocketRegion = new TextureRegion(rocketTex);
+        miniRocketTex = makeMiniRocketTexture();
+        miniRocketRegion = new TextureRegion(miniRocketTex);
         softDotTex = makeSoftDotTexture();
 
         prefs = Gdx.app.getPreferences("nx_space");
@@ -530,6 +562,30 @@ public class SpaceWarGame extends ApplicationAdapter {
     }
 
     /** Sprite roket terbang (hidung ke kanan), digambar vektor lewat SpriteArt. */
+    /** Tekstur mini roket alien: lebih kecil dari roket pemain, hidung oranye ke kanan. */
+    private Texture makeMiniRocketTexture() {
+        Pixmap pm = new Pixmap(120, 48, Pixmap.Format.RGBA8888);
+        // Api ekor
+        SpriteArt.fillPoly(pm, new float[]{8, 24, 26, 19, 26, 29},
+                SpriteArt.col(255, 150, 50, 0.95f));
+        // Badan terang bertepi gelap
+        SpriteArt.fillEllipse(pm, 66, 24, 44, 13, SpriteArt.col(52, 56, 68, 1f));
+        SpriteArt.fillEllipse(pm, 66, 24, 41, 10.5f, SpriteArt.col(226, 232, 240, 1f));
+        // Hidung oranye menunjuk KANAN (arah terbang)
+        SpriteArt.fillPoly(pm, new float[]{118, 24, 92, 14, 92, 34},
+                SpriteArt.col(240, 110, 40, 1f));
+        // Sirip merah di ekor
+        SpriteArt.fillPoly(pm, new float[]{26, 16, 40, 4, 44, 16},
+                SpriteArt.col(200, 70, 44, 1f));
+        SpriteArt.fillPoly(pm, new float[]{26, 32, 40, 44, 44, 32},
+                SpriteArt.col(200, 70, 44, 1f));
+        // Jendela kecil
+        SpriteArt.fillEllipse(pm, 84, 24, 6, 4.5f, SpriteArt.col(90, 200, 255, 1f));
+        Texture tex = SpriteArt.toTexture(pm);
+        pm.dispose();
+        return tex;
+    }
+
     private Texture makeRocketTexture() {
         Pixmap pm = new Pixmap(60, 24, Pixmap.Format.RGBA8888);
         // Sirip ekor (merah-oranye)
@@ -657,8 +713,12 @@ public class SpaceWarGame extends ApplicationAdapter {
         if (x > WORLD_W - 16f) x = WORLD_W - 16f;
         if (y < 16f) y = 16f;
         if (y > WORLD_H - 16f) y = WORLD_H - 16f;
-        int type = (Math.random() < PELUANG_KUNING)
-                ? Enemy.GUNNER : Enemy.DRONE;
+        // Komposisi: alien roket 15%, alien kuning (gunner) 30%,
+        // sisanya alien ungu (drone) 55%
+        double acak = Math.random();
+        int type = acak < PELUANG_ROKET ? Enemy.ROCKETEER
+                : acak < PELUANG_ROKET + PELUANG_KUNING ? Enemy.GUNNER
+                : Enemy.DRONE;
         enemies.add(new Enemy(type, x, y));
     }
 
@@ -773,6 +833,19 @@ public class SpaceWarGame extends ApplicationAdapter {
      * bila tidak ada musuh, roket meluncur ke arah hadap pesawat dan
      * bisa mengunci musuh yang masuk jangkauannya di tengah jalan.
      */
+    /** Meluncurkan mini roket pengejar dari alien roket ke sasarannya. */
+    private void luncurkanMiniRoket(Enemy e) {
+        int aktif = 0;
+        for (MiniRocket m : miniRockets) {
+            if (m.pemilik == e) aktif++;
+        }
+        if (aktif >= MINI_ROCKET_MAX_PER) return;
+        float arah = (float) Math.toDegrees(
+                Math.atan2(e.targetY - e.y, e.targetX - e.x));
+        miniRockets.add(new MiniRocket(e.x, e.y, arah, e,
+                e.targetIsPlayer ? null : e.targetEnemy, e.targetIsPlayer));
+    }
+
     private void luncurkanRoket() {
         Enemy sasaran = null;
         float terbaik = Float.MAX_VALUE;
@@ -1081,6 +1154,7 @@ public class SpaceWarGame extends ApplicationAdapter {
         terapkanUpgrade();
         enemies.clear();
         bullets.clear();
+        miniRockets.clear();
         bombs.clear();
         score = 0;
         koinRun = 0;
@@ -1171,6 +1245,7 @@ public class SpaceWarGame extends ApplicationAdapter {
         enemies.clear();
         bullets.clear();
         rockets.clear();
+        miniRockets.clear();
         bombs.clear();
         kapalInduk = null;
         bossSpawned = false;
@@ -1582,6 +1657,13 @@ public class SpaceWarGame extends ApplicationAdapter {
                 }
                 updateEnemyAi(e, delta, WORLD_W, WORLD_H);
                 e.update(delta, WORLD_W, WORLD_H);
+                if (e.type == Enemy.ROCKETEER) {
+                    // Alien roket tidak menembak peluru: ia meluncurkan
+                    // mini roket pengejar dari jarak lebih jauh
+                    boolean engagedR = e.hasTarget && e.targetDist <= MINI_ROCKET_RANGE;
+                    if (e.siapRoket(delta, engagedR)) luncurkanMiniRoket(e);
+                    continue;
+                }
                 boolean engaged = e.hasTarget && e.targetDist <= 205f;
                 if (e.updateFire(delta, engaged)) {
                     spawnEnemyBullet(e);
@@ -1696,6 +1778,90 @@ public class SpaceWarGame extends ApplicationAdapter {
             Iterator<Rocket> rit = rockets.iterator();
             while (rit.hasNext()) {
                 if (rit.next().dead) rit.remove();
+            }
+
+            // Mini roket alien: memburu sasarannya (auto-aim), berbelok
+            // mengejar posisi hidup sasarannya sampai kena / habis umur
+            for (MiniRocket m : miniRockets) {
+                float aimX = m.x + (float) Math.cos(Math.toRadians(m.angle)) * 10f;
+                float aimY = m.y + (float) Math.sin(Math.toRadians(m.angle)) * 10f;
+                boolean adaSasaran = false;
+                if (m.targetPemain) {
+                    if (!player.dead) {
+                        aimX = player.x;
+                        aimY = player.y;
+                        adaSasaran = true;
+                    }
+                } else if (m.targetMusuh != null && m.targetMusuh.hp > 0
+                        && enemies.contains(m.targetMusuh)) {
+                    aimX = m.targetMusuh.x;
+                    aimY = m.targetMusuh.y;
+                    adaSasaran = true;
+                }
+                if (adaSasaran) {
+                    float ingin = (float) Math.toDegrees(
+                            Math.atan2(aimY - m.y, aimX - m.x));
+                    m.angle = SpriteArt.turnToward(m.angle, ingin,
+                            MINI_ROCKET_TURN * delta);
+                }
+                float radM = (float) Math.toRadians(m.angle);
+                float cosM = (float) Math.cos(radM), sinM = (float) Math.sin(radM);
+                m.x += cosM * MINI_ROCKET_SPEED * delta;
+                m.y += sinM * MINI_ROCKET_SPEED * delta;
+                m.life -= delta;
+                particles.add(new Particle(
+                        m.x - cosM * 10f, m.y - sinM * 10f,
+                        -cosM * 10f + (float) (Math.random() * 5f - 2.5f),
+                        -sinM * 10f + (float) (Math.random() * 5f - 2.5f),
+                        0.3f, 1.9f, 0.86f, 0.88f, 0.92f));
+                if (m.life <= 0f || m.x < -12f || m.x > WORLD_W + 12f
+                        || m.y < -12f || m.y > WORLD_H + 12f) {
+                    explosion(m.x, m.y, false);
+                    m.dead = true;
+                    continue;
+                }
+                // Kena pemain
+                if (!player.dead) {
+                    float dx = player.x - m.x, dy = player.y - m.y;
+                    float rr = Player.RADIUS + 5f;
+                    if (dx * dx + dy * dy < rr * rr) {
+                        explosion(m.x, m.y, false);
+                        m.dead = true;
+                        if (!player.isInvulnerable()) {
+                            player.damage(MINI_ROCKET_DAMAGE);
+                            onPlayerHit(viewW, viewH);
+                        }
+                        continue;
+                    }
+                }
+                // Kena partner
+                if (partner != null && !partner.dead) {
+                    float dx = partner.x - m.x, dy = partner.y - m.y;
+                    float rr = Partner.RADIUS + 5f;
+                    if (dx * dx + dy * dy < rr * rr) {
+                        explosion(m.x, m.y, false);
+                        m.dead = true;
+                        partnerKena(MINI_ROCKET_DAMAGE);
+                        continue;
+                    }
+                }
+                // Kena alien lain (bukan penembaknya): roket alien tetap
+                // berbahaya bagi sesama alien, tanpa skor untuk pemain
+                for (Enemy e : enemies) {
+                    if (e == m.pemilik || e.hp <= 0) continue;
+                    float dx = e.x - m.x, dy = e.y - m.y;
+                    float rr = e.radius + 5f;
+                    if (dx * dx + dy * dy < rr * rr) {
+                        e.damage(MINI_ROCKET_DAMAGE);
+                        explosion(m.x, m.y, false);
+                        m.dead = true;
+                        break;
+                    }
+                }
+            }
+            Iterator<MiniRocket> mit = miniRockets.iterator();
+            while (mit.hasNext()) {
+                if (mit.next().dead) mit.remove();
             }
 
             // Musuh yang hancur -> ledakan; skor hanya bila pemain yang membunuh
@@ -1939,6 +2105,10 @@ public class SpaceWarGame extends ApplicationAdapter {
             batch.draw(rocketRegion, r.x - 15f, r.y - 6f, 15f, 6f,
                     30f, 12f, 1f, 1f, r.angle);
         }
+        for (MiniRocket m : miniRockets) {
+            batch.draw(miniRocketRegion, m.x - 11f, m.y - 4.5f, 11f, 4.5f,
+                    22f, 9f, 1f, 1f, m.angle);
+        }
         // Bom kapal induk yang sedang meluncur ke sasarannya
         for (Bomb b : bombs) {
             batch.draw(bombTex, b.x - 9f, b.y - 9f, 18f, 18f);
@@ -2172,6 +2342,7 @@ public class SpaceWarGame extends ApplicationAdapter {
                 continue;
             }
             if (e.type == Enemy.GUNNER) uiBatch.setColor(1f, 0.38f, 0.30f, 0.95f);
+            else if (e.type == Enemy.ROCKETEER) uiBatch.setColor(0.45f, 0.95f, 0.50f, 0.95f);
             else uiBatch.setColor(0.95f, 0.45f, 0.90f, 0.95f);
             uiBatch.draw(whiteTex, petaX + e.x * skalaPeta - titikM / 2f,
                     petaY + e.y * skalaPeta - titikM / 2f, titikM, titikM);
@@ -2226,6 +2397,7 @@ public class SpaceWarGame extends ApplicationAdapter {
         if (nosBtnTex != null) nosBtnTex.dispose();
         if (rocketBtnTex != null) rocketBtnTex.dispose();
         if (rocketTex != null) rocketTex.dispose();
+        if (miniRocketTex != null) miniRocketTex.dispose();
         if (whiteTex != null) whiteTex.dispose();
         if (softDotTex != null) softDotTex.dispose();
         if (player != null) player.dispose();
