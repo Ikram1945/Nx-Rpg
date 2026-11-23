@@ -12,7 +12,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 
 /**
- * Pintu masuk Android: menjalankan game libGDX (NxRpgGame).
+ * Pintu masuk Android: menjalankan game libGDX (SpaceWarGame).
  * Dilengkapi penangkap error menyeluruh: error apa pun yang lolos dari
  * penampil error di dalam game akan disimpan ke berkas lalu ditampilkan
  * oleh ErrorActivity — bukan force close diam-diam.
@@ -20,7 +20,7 @@ import java.io.StringWriter;
 public class MainActivity extends AndroidApplication {
 
     /** Nama berkas laporan error terakhir (di penyimpanan internal aplikasi). */
-    public static final String CRASH_FILE = "nx-space-crash.txt";
+    public static final String CRASH_FILE = "space-war-crash.txt";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,7 +39,7 @@ public class MainActivity extends AndroidApplication {
         config.useImmersiveMode = true;
         config.useAccelerometer = false;
         config.useCompass = false;
-        initialize(new NxRpgGame(), config);
+        initialize(new SpaceWarGame(), config);
     }
 
     private void pasangPenangkapError() {
@@ -51,7 +51,7 @@ public class MainActivity extends AndroidApplication {
                 try {
                     StringWriter sw = new StringWriter();
                     error.printStackTrace(new PrintWriter(sw));
-                    String teks = "Nx Space - laporan error\n\n" + sw.toString();
+                    String teks = "Space War - laporan error\n\n" + sw.toString();
                     FileOutputStream fos = openFileOutput(CRASH_FILE, MODE_PRIVATE);
                     try {
                         fos.write(teks.getBytes("UTF-8"));

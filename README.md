@@ -1,14 +1,18 @@
-# Nx Space (sebelumnya Nx RPG)
+# Space War
 
 Game **pertempuran luar angkasa** 2D berbasis **libGDX 1.14.2**, dibangun
 sebagai proyek ApkBuild/CodeAssist satu modul (paket `com.ikram.nexus`).
-Proyek ini awalnya RPG desa top-down; pada 2026-11-23 dirombak total
-menjadi penembak luar angkasa (berkas peta desa lama tidak lagi dipakai,
-tapi masih tersimpan di `assets/`).
+Proyek ini awalnya bernama Nx Rpg (dulu RPG desa top-down); pada
+2026-11-23 dirombak total menjadi penembak luar angkasa, lalu berganti
+nama menjadi **Space War**. Berkas peta desa lama tidak lagi dipakai,
+tapi masih tersimpan di `assets/`.
 
 ## Cara bermain
 
-- Pesawatmu di sisi kiri layar; alien datang dari kanan tanpa henti.
+- Pesawatmu melawan gelombang alien yang datang tanpa henti.
+- Semua pesawat — pemain maupun alien — **bisa berbelok ke segala
+  arah**: badannya berputar mengikuti arah terbangnya, tidak terkunci
+  menghadap satu sisi.
 - **Drone** (ungu, si keroco): cepat & lincah, 2 darah, menembak
   beruntun 3x, 100 poin.
 - **Gunner** (merah): lambat & tebal, 5 darah, tembakan tunggal
@@ -26,8 +30,10 @@ tapi masih tersimpan di `assets/`).
 
 ## Kendali
 
-- **Joystick** tetap di kiri bawah (sentuh + geser) untuk bergerak bebas.
-- **Tombol tembak** di kanan bawah: tahan untuk menembak terus.
+- **Joystick** tetap di kiri bawah (sentuh + geser) untuk bergerak bebas;
+  pesawat berbelok mengikuti arah gerakmu.
+- **Tombol tembak** di kanan bawah: tahan untuk menembak terus; tembakan
+  keluar ke **arah hadap pesawat**.
 - Di desktop: WASD / tombol panah untuk bergerak, SPASI untuk menembak.
 
 ## Penampil error (anti force close diam-diam)
@@ -45,8 +51,15 @@ tapi masih tersimpan di `assets/`).
   kode** (Pixmap -> Texture) sebagai gambar vektor halus — poligon + elips
   di kanvas besar lalu diperkecil bilinear — tanpa berkas gambar, karena
   rantai build di HP terbukti merusak tekstur PNG karakter.
-- Latar bintang paralaks 3 lapis; ledakan partikel; kilat merah saat kena.
-- Tiga berkas sumber utama: `NxRpgGame.java` (lingkup game + HUD),
-  `Player.java` (pesawat pemain), `Enemy.java` (alien).
+- Latar bintang paralaks 3 lapis + nebula lembut; ledakan partikel;
+  kilat merah saat kena.
+- Berkas sumber (paket `com.ikram.nexus`):
+  - `SpaceWarGame.java` — lingkup game, AI bot, tabrakan, HUD.
+  - `Player.java` — pesawat pemain. `Enemy.java` — alien + mesin tembak.
+  - `SpriteArt.java` — perkakas gambar vektor bersama + putaran sudut.
+  - `ErrorScreen.java` — penampil error di dalam game.
+  - `MainActivity.java` / `ErrorActivity.java` — pintu masuk Android +
+    penangkap & penampil error fatal.
+  - `NxRpgGame.java` — berkas kosong sisa ganti nama (boleh dihapus).
 - Aset yang masih dipakai: tekstur joystick `assets/ui/joy_base.png` dan
   `assets/ui/joy_knob.png`.

@@ -37,7 +37,7 @@ public class ErrorActivity extends Activity {
         root.setPadding(32, 32, 32, 32);
 
         TextView judul = new TextView(this);
-        judul.setText("Nx Space - Terjadi Error");
+        judul.setText("Space War - Terjadi Error");
         judul.setTextSize(20);
         root.addView(judul);
 
@@ -68,7 +68,7 @@ public class ErrorActivity extends Activity {
                 ClipboardManager cm = (ClipboardManager)
                         getSystemService(Context.CLIPBOARD_SERVICE);
                 if (cm != null) {
-                    cm.setPrimaryClip(ClipData.newPlainText("Nx Space error", teks));
+                    cm.setPrimaryClip(ClipData.newPlainText("Space War error", teks));
                 }
                 Toast.makeText(ErrorActivity.this,
                         "Error tersalin - tempel & kirim ke pengembang",
