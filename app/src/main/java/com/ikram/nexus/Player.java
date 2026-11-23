@@ -16,7 +16,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
  */
 public class Player {
 
-    public static final int MAX_HP = 100;
+    public static final int MAX_HP = 200;
     public static final float SPEED = 118f;
     public static final float RADIUS = 7f;
     /** Kecepatan berputar badan pesawat (derajat per detik). */

@@ -30,12 +30,13 @@ tapi masih tersimpan di `assets/`.
   hindari garisnya!), **bom tekanan tinggi** beradius ledak besar,
   dan **NOS super** untuk menerjang lurus ke arahmu. Damage-nya
   tetap angka tercatat: laser **20**, bom **20**.
-- **Partner** (pesawat teman berwarna hijau toska): AI yang terbang
-  dalam formasi di sisimu dan **menembak otomatis** musuh terdekat —
-  membasmi musuh bersamamu, dan bunuhannya ikut jadi skormu. HP
-  **50**; bila hancur, ia muncul lagi di sisimu setelah 6 detik.
-  (Rencana masa depan: partner bisa dipasang/dilepas; sekarang ia
-  selalu ikut.)
+- **Partner** (pesawat teman berwarna hijau toska): AI yang
+  mengikutimu dengan bebas — berputar mengelilingimu saat tenang,
+  dan **menerjang** musuh yang masuk jangkauan sergapnya, mengorbit
+  dekat sambil **menembak otomatis**. Membasmi musuh bersamamu, dan
+  bunuhannya ikut jadi skormu. HP **50**; bila hancur, ia muncul
+  lagi di sisimu setelah 6 detik. (Rencana masa depan: partner bisa
+  dipasang/dilepas; sekarang ia selalu ikut.)
 - Semua musuh adalah **bot AI**: mereka memilih lawan terdekat — bisa
   kamu, bisa alien lain (sesama alien saling serang!) — lalu menjaga
   jarak tempur sambil menyamping dan menembak sasarannya. Musuh yang
@@ -44,8 +45,8 @@ tapi masih tersimpan di `assets/`.
 - **Semua HP memakai sistem angka** (tidak ada lagi ikon hati), dan
   semua damage adalah angka TETAP yang tercatat — tidak pernah acak:
   peluru (pemain & musuh) **10**, tabrakan badan **20**, roket **20**
-  (+ percikan **10**). Darahmu **100**, tampil sebagai bar + tulisan
-  "HP 100/100" di kiri atas (bar berubah hijau → kuning → merah).
+  (+ percikan **10**). Darahmu **200**, tampil sebagai bar + tulisan
+  "HP 200/200" di kiri atas (bar berubah hijau → kuning → merah).
   Kena serangan = kebal sesaat (berkedip). HP habis = game over, lalu
   mulai lagi sendiri dengan skor tertinggi tersimpan.
 - Gelombang makin rapat seiring waktu. Komposisi musuh tetap:
@@ -59,8 +60,10 @@ tapi masih tersimpan di `assets/`.
 
 - **Joystick** tetap di kiri bawah (sentuh + geser) untuk bergerak bebas;
   pesawat berbelok mengikuti arah gerakmu.
-- **Tombol tembak** di kanan bawah: tahan untuk menembak terus; tembakan
-  keluar ke **arah hadap pesawat**.
+- **Tombol tembak** di kanan bawah: tahan untuk menembak terus;
+  tembakanmu **auto-aim** — peluru mengarah sendiri ke musuh hidup
+  terdekat dalam jangkauan (bila tidak ada musuh, peluru meluncur
+  lurus ke arah hadap pesawat).
 - **Tombol NOS** (oranye, ikon petir) tepat di atas tombol tembak:
   ledakan kecepatan **2,1x selama 1,6 detik** dengan jejak cahaya di
   ekor pesawat. Setelah dipakai ada **cooldown 4 detik** — tombol

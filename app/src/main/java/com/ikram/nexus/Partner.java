@@ -10,8 +10,11 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 
 /**
  * Partner pemain (Space War): pesawat teman yang dikendalikan AI.
- * Terbang dalam formasi di sisi pemain dan MENEMBAK OTOMATIS musuh
- * terdekat di jangkauannya — membasmi musuh bersama pemain. Punya
+ * Mengikuti pemain dengan bebas — berputar mengelilingi pemain saat
+ * tenang, MENERJANG musuh yang masuk jangkauan sergapnya, mengorbit
+ * dekat sambil MENEMBAK OTOMATIS — membasmi musuh bersama pemain.
+ * Kemudinya dihitung SpaceWarGame; kelas ini menyimpan keadaan,
+ * gerak, dan gambar. Punya
  * darah sendiri (sistem angka, seperti semua pesawat); bila hancur,
  * ia meledak dan muncul lagi di sisi pemain setelah beberapa detik
  * (diatur oleh SpaceWarGame). Badan berbelok mengikuti arah gerak

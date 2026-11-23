@@ -68,8 +68,11 @@ public class SpaceWarGame extends ApplicationAdapter {
     private static final float BOSS_DASH_TIME = 0.75f;
     // Partner (teman AI pemain): menembak otomatis dalam jangkauan ini
     private static final float PARTNER_RANGE = 210f;
+    private static final float PARTNER_AGGRO = 250f;
     private static final float PARTNER_FIRE_INTERVAL = 0.24f;
     private static final float PARTNER_RESPAWN_TIME = 6f;
+    // Tembakan biasa pemain AUTO-AIM ke musuh terdekat dalam radius ini
+    private static final float AUTO_AIM_RANGE = 300f;
     private static final float ROCKET_LOCK_RANGE = 260f;
 
     private OrthographicCamera camera;
@@ -93,6 +96,7 @@ public class SpaceWarGame extends ApplicationAdapter {
     // Keadaan partner
     private float partnerFireTimer;
     private float partnerRespawnTimer;
+    private float partnerOrbitAngle;
     // Keadaan kapal induk (hanya satu, jadi cukup disimpan di sini)
     private Enemy kapalInduk;
     private boolean bossSpawned;
@@ -766,9 +770,12 @@ public class SpaceWarGame extends ApplicationAdapter {
     }
 
     /**
-     * Kemudi partner: jaga formasi di belakang-samping pemain, dan
-     * tembak OTOMATIS musuh hidup terdekat dalam jangkauan (pelurunya
-     * satu tim dengan pemain, jadi pembunuhan partner ikut jadi skor).
+     * Kemudi partner: ia MENGIKUTI pemain tapi BEBAS — berputar-putar
+     * mengelilingi pemain saat keadaan tenang, dan begitu ada musuh
+     * dalam jangkauan sergap ia MENERJANG ke arah musuh itu, mengorbit
+     * dekat sambil menembak otomatis. Bila terlalu jauh dari pemain,
+     * ia kembali dulu. Pelurunya satu tim dengan pemain, jadi
+     * pembunuhan partner ikut jadi skor pemain.
      */
     private void updatePartner(float delta) {
         if (partner == null || player == null) return;
@@ -780,37 +787,56 @@ public class SpaceWarGame extends ApplicationAdapter {
             partner.update(delta, 0f, 0f, WORLD_W, WORLD_H);
             return;
         }
-        // Titik formasi: di belakang hidung pemain, menyamping
-        float rad = (float) Math.toRadians(player.facing);
-        float cos = (float) Math.cos(rad), sin = (float) Math.sin(rad);
-        float ax = player.x - cos * 26f - sin * 17f;
-        float ay = player.y - sin * 26f + cos * 17f;
-        float dx = ax - partner.x;
-        float dy = ay - partner.y;
+        float jauhDariPemain = (float) Math.hypot(
+                partner.x - player.x, partner.y - player.y);
+        // Sasaran sergap: musuh hidup terdekat dari partner (diabaikan
+        // bila partner sudah terlalu jauh dari pemain — ia harus pulang)
+        Enemy sasaran = null;
+        float terbaik = PARTNER_AGGRO * PARTNER_AGGRO;
+        if (jauhDariPemain < 300f) {
+            for (Enemy e : enemies) {
+                if (e.hp <= 0) continue;
+                float ex = e.x - partner.x, ey = e.y - partner.y;
+                float d = ex * ex + ey * ey;
+                if (d < terbaik) {
+                    terbaik = d;
+                    sasaran = e;
+                }
+            }
+        }
+        float tujuanX, tujuanY;
+        float penguat = 5f;
+        if (sasaran != null) {
+            // MENERJANG: kejar titik orbit yang berputar rapat di
+            // sekeliling musuh — datang cepat, lalu berputar di dekatnya
+            partnerOrbitAngle += delta * 2.1f;
+            tujuanX = sasaran.x + (float) Math.cos(partnerOrbitAngle) * 52f;
+            tujuanY = sasaran.y + (float) Math.sin(partnerOrbitAngle) * 52f;
+            penguat = 6.5f;
+        } else {
+            // Bebas mengelilingi pemain: titik sasarannya terus berputar
+            // mengelilingi pemain pada radius longgar
+            partnerOrbitAngle += delta * 0.8f;
+            tujuanX = player.x + (float) Math.cos(partnerOrbitAngle) * 64f;
+            tujuanY = player.y + (float) Math.sin(partnerOrbitAngle) * 64f;
+        }
+        float dx = tujuanX - partner.x;
+        float dy = tujuanY - partner.y;
         float dist = (float) Math.sqrt(dx * dx + dy * dy);
         float vx = 0f, vy = 0f;
         if (dist > 2f) {
-            float spd = Math.min(Partner.MAX_SPEED, dist * 5f);
+            float spd = Math.min(Partner.MAX_SPEED, dist * penguat);
             vx = dx / dist * spd;
             vy = dy / dist * spd;
         }
         partner.update(delta, vx, vy, WORLD_W, WORLD_H);
-        // Sasaran: musuh hidup terdekat dalam jangkauan
-        Enemy sasaran = null;
-        float terbaik = PARTNER_RANGE * PARTNER_RANGE;
-        for (Enemy e : enemies) {
-            if (e.hp <= 0) continue;
-            float ex = e.x - partner.x, ey = e.y - partner.y;
-            float d = ex * ex + ey * ey;
-            if (d < terbaik) {
-                terbaik = d;
-                sasaran = e;
-            }
-        }
+        // Tembak otomatis begitu musuh dalam jangkauan tembak
         if (sasaran != null) {
             partner.faceToward(sasaran.x, sasaran.y, delta);
+            float jrk = (float) Math.hypot(
+                    sasaran.x - partner.x, sasaran.y - partner.y);
             partnerFireTimer -= delta;
-            if (partnerFireTimer <= 0f) {
+            if (jrk <= PARTNER_RANGE && partnerFireTimer <= 0f) {
                 float ang = (float) Math.atan2(sasaran.y - partner.y, sasaran.x - partner.x)
                         + (float) (Math.random() * 2.0 - 1.0) * 0.03f;
                 bullets.add(new Bullet(partner.gunX(), partner.gunY(),
@@ -818,8 +844,6 @@ public class SpaceWarGame extends ApplicationAdapter {
                         (float) Math.sin(ang) * PLAYER_BULLET_SPEED, true, null));
                 partnerFireTimer = PARTNER_FIRE_INTERVAL;
             }
-        } else if (dist <= 2f) {
-            partner.faceToward(player.x + cos * 40f, player.y + sin * 40f, delta);
         }
     }
 
@@ -1105,10 +1129,29 @@ public class SpaceWarGame extends ApplicationAdapter {
                 }
             }
 
-            // Menembak (tahan tombol / spasi)
+            // Menembak (tahan tombol / spasi) — AUTO-AIM: peluru diarahkan
+            // ke musuh hidup terdekat dalam jangkauan; bila tidak ada
+            // musuh, peluru meluncur lurus ke arah hadap pesawat.
             fireTimer -= delta;
             if (fireHeld && fireTimer <= 0f && !player.dead) {
-                float rad = (float) Math.toRadians(player.facing);
+                float aim = player.facing;
+                Enemy sasaran = null;
+                float terbaik = AUTO_AIM_RANGE * AUTO_AIM_RANGE;
+                for (Enemy e : enemies) {
+                    if (e.hp <= 0) continue;
+                    float dx = e.x - player.x;
+                    float dy = e.y - player.y;
+                    float d = dx * dx + dy * dy;
+                    if (d < terbaik) {
+                        terbaik = d;
+                        sasaran = e;
+                    }
+                }
+                if (sasaran != null) {
+                    aim = (float) Math.toDegrees(Math.atan2(
+                            sasaran.y - player.gunY(), sasaran.x - player.gunX()));
+                }
+                float rad = (float) Math.toRadians(aim);
                 bullets.add(new Bullet(player.gunX(), player.gunY(),
                         (float) Math.cos(rad) * PLAYER_BULLET_SPEED,
                         (float) Math.sin(rad) * PLAYER_BULLET_SPEED, true, null));
