@@ -57,6 +57,19 @@ public class SpaceWarGame extends ApplicationAdapter {
     private static final float PELUANG_KUNING = 0.30f;
     // Bot musuh yang hidup bersamaan dibatasi segini
     private static final int MAX_BOT_HIDUP = 7;
+    // Kapal induk (boss): hanya SATU dalam setiap permainan, muncul
+    // sekali setelah permainan berjalan BOSS_SPAWN_TIME detik
+    private static final float BOSS_SPAWN_TIME = 45f;
+    private static final int LASER_DAMAGE = 20;
+    private static final int BOMB_DAMAGE = 20;
+    private static final float BOMB_RADIUS = 46f;
+    private static final float BOMB_SPEED = 135f;
+    private static final float BOSS_DASH_SPEED = 250f;
+    private static final float BOSS_DASH_TIME = 0.75f;
+    // Partner (teman AI pemain): menembak otomatis dalam jangkauan ini
+    private static final float PARTNER_RANGE = 210f;
+    private static final float PARTNER_FIRE_INTERVAL = 0.24f;
+    private static final float PARTNER_RESPAWN_TIME = 6f;
     private static final float ROCKET_LOCK_RANGE = 260f;
 
     private OrthographicCamera camera;
@@ -71,9 +84,26 @@ public class SpaceWarGame extends ApplicationAdapter {
     private TextureRegion rocketRegion;
 
     private Player player;
+    private Partner partner;
     private final ArrayList<Enemy> enemies = new ArrayList<>();
     private final ArrayList<Bullet> bullets = new ArrayList<>();
     private final ArrayList<Rocket> rockets = new ArrayList<>();
+    private final ArrayList<Bomb> bombs = new ArrayList<>();
+    private Texture bombTex;
+    // Keadaan partner
+    private float partnerFireTimer;
+    private float partnerRespawnTimer;
+    // Keadaan kapal induk (hanya satu, jadi cukup disimpan di sini)
+    private Enemy kapalInduk;
+    private boolean bossSpawned;
+    private float bossWarnTimer;
+    private int bossLaserPhase;      // 0 = jeda, 1 = ancang-ancang, 2 = menembak
+    private float bossLaserT;        // sisa waktu fase laser saat ini
+    private float bossLaserAngle;    // arah laser (derajat)
+    private float bossBombTimer;
+    private float bossNosTimer;
+    private float bossDashTime;
+    private float bossDashDirX, bossDashDirY;
     private final ArrayList<Particle> particles = new ArrayList<>();
 
     // Bintang latar: 3 lapis paralaks [x, y, kecepatan, ukuran, terang]
@@ -156,6 +186,16 @@ public class SpaceWarGame extends ApplicationAdapter {
             float rad = (float) Math.toRadians(angleDeg);
             this.vx = (float) Math.cos(rad) * ROCKET_SPEED;
             this.vy = (float) Math.sin(rad) * ROCKET_SPEED;
+        }
+    }
+
+    /** Bom tekanan tinggi kapal induk: meluncur ke titik sasaran lalu meledak beradius besar. */
+    private static class Bomb {
+        float x, y, targetX, targetY, time;
+        boolean dead;
+        Bomb(float x, float y, float targetX, float targetY) {
+            this.x = x; this.y = y;
+            this.targetX = targetX; this.targetY = targetY;
         }
     }
 
@@ -342,6 +382,25 @@ public class SpaceWarGame extends ApplicationAdapter {
         if (player == null) {
             player = new Player(WORLD_W * 0.42f, WORLD_H / 2f);
         }
+        if (partner == null) {
+            partner = new Partner(WORLD_W * 0.42f - 30f, WORLD_H / 2f + 18f);
+        }
+        if (bombTex == null) {
+            bombTex = makeBombTexture();
+        }
+    }
+
+    /** Tekstur bom kapal induk: bola baja gelap berlampu merah. */
+    private Texture makeBombTexture() {
+        Pixmap pm = new Pixmap(36, 36, Pixmap.Format.RGBA8888);
+        SpriteArt.fillEllipse(pm, 18, 18, 15, 15, SpriteArt.col(24, 24, 32, 1f));
+        SpriteArt.fillEllipse(pm, 18, 18, 12.5f, 12.5f, SpriteArt.col(70, 72, 88, 1f));
+        SpriteArt.fillEllipse(pm, 13, 12, 5, 3.4f, SpriteArt.col(255, 255, 255, 0.35f));
+        SpriteArt.fillEllipse(pm, 18, 18, 4.2f, 4.2f, SpriteArt.col(255, 60, 50, 1f));
+        SpriteArt.fillEllipse(pm, 18, 18, 1.8f, 1.8f, SpriteArt.col(255, 255, 255, 1f));
+        Texture t = SpriteArt.toTexture(pm);
+        pm.dispose();
+        return t;
     }
 
     /** Tekstur tombol NOS: cincin oranye + ikon petir (label teks digambar HUD). */
@@ -695,6 +754,222 @@ public class SpaceWarGame extends ApplicationAdapter {
         }
     }
 
+    // ================= PARTNER (teman AI) =================
+
+    /** Partner kena serangan: bila darahnya habis, ia meledak dan jadwal muncul laginya diatur. */
+    private void partnerKena(int dmg) {
+        if (partner == null || partner.dead) return;
+        if (partner.damage(dmg) && partner.dead) {
+            explosion(partner.x, partner.y, false);
+            partnerRespawnTimer = PARTNER_RESPAWN_TIME;
+        }
+    }
+
+    /**
+     * Kemudi partner: jaga formasi di belakang-samping pemain, dan
+     * tembak OTOMATIS musuh hidup terdekat dalam jangkauan (pelurunya
+     * satu tim dengan pemain, jadi pembunuhan partner ikut jadi skor).
+     */
+    private void updatePartner(float delta) {
+        if (partner == null || player == null) return;
+        if (partner.dead) {
+            partnerRespawnTimer -= delta;
+            if (partnerRespawnTimer <= 0f && !player.dead) {
+                partner.respawn(player.x - 30f, player.y + 18f);
+            }
+            partner.update(delta, 0f, 0f, WORLD_W, WORLD_H);
+            return;
+        }
+        // Titik formasi: di belakang hidung pemain, menyamping
+        float rad = (float) Math.toRadians(player.facing);
+        float cos = (float) Math.cos(rad), sin = (float) Math.sin(rad);
+        float ax = player.x - cos * 26f - sin * 17f;
+        float ay = player.y - sin * 26f + cos * 17f;
+        float dx = ax - partner.x;
+        float dy = ay - partner.y;
+        float dist = (float) Math.sqrt(dx * dx + dy * dy);
+        float vx = 0f, vy = 0f;
+        if (dist > 2f) {
+            float spd = Math.min(Partner.MAX_SPEED, dist * 5f);
+            vx = dx / dist * spd;
+            vy = dy / dist * spd;
+        }
+        partner.update(delta, vx, vy, WORLD_W, WORLD_H);
+        // Sasaran: musuh hidup terdekat dalam jangkauan
+        Enemy sasaran = null;
+        float terbaik = PARTNER_RANGE * PARTNER_RANGE;
+        for (Enemy e : enemies) {
+            if (e.hp <= 0) continue;
+            float ex = e.x - partner.x, ey = e.y - partner.y;
+            float d = ex * ex + ey * ey;
+            if (d < terbaik) {
+                terbaik = d;
+                sasaran = e;
+            }
+        }
+        if (sasaran != null) {
+            partner.faceToward(sasaran.x, sasaran.y, delta);
+            partnerFireTimer -= delta;
+            if (partnerFireTimer <= 0f) {
+                float ang = (float) Math.atan2(sasaran.y - partner.y, sasaran.x - partner.x)
+                        + (float) (Math.random() * 2.0 - 1.0) * 0.03f;
+                bullets.add(new Bullet(partner.gunX(), partner.gunY(),
+                        (float) Math.cos(ang) * PLAYER_BULLET_SPEED,
+                        (float) Math.sin(ang) * PLAYER_BULLET_SPEED, true, null));
+                partnerFireTimer = PARTNER_FIRE_INTERVAL;
+            }
+        } else if (dist <= 2f) {
+            partner.faceToward(player.x + cos * 40f, player.y + sin * 40f, delta);
+        }
+    }
+
+    // ================= KAPAL INDUK (boss) =================
+
+    /** Memunculkan kapal induk di tepi dunia yang jauh dari pemain. */
+    private void spawnKapalInduk() {
+        float bx = player.x < WORLD_W / 2f ? WORLD_W - 70f : 70f;
+        float by = WORLD_H / 2f + (float) (Math.random() * 160f - 80f);
+        kapalInduk = new Enemy(Enemy.MOTHERSHIP, bx, by);
+        enemies.add(kapalInduk);
+        bossSpawned = true;
+        bossWarnTimer = 2.6f;
+        bossLaserPhase = 0;
+        bossLaserT = 2.2f;
+        bossBombTimer = 2.4f;
+        bossNosTimer = 5f;
+        bossDashTime = 0f;
+    }
+
+    /**
+     * Otak kapal induk: menjaga jarak tempur sambil menyamping,
+     * sesekali menerjang dengan NOS SUPER lurus ke pemain, menembak
+     * LASER berkala (ancang-ancang dulu, jadi bisa dihindari), dan
+     * menjatuhkan BOM tekanan tinggi ke posisi pemain.
+     */
+    private void updateKapalInduk(Enemy e, float delta, float viewW, float viewH) {
+        float dx = player.x - e.x;
+        float dy = player.y - e.y;
+        float dist = (float) Math.sqrt(dx * dx + dy * dy);
+        float ux = dist > 1f ? dx / dist : 1f;
+        float uy = dist > 1f ? dy / dist : 0f;
+        bossNosTimer -= delta;
+        if (bossDashTime > 0f) {
+            // Sedang menerjang (NOS super)
+            bossDashTime -= delta;
+            e.vx = bossDashDirX * BOSS_DASH_SPEED;
+            e.vy = bossDashDirY * BOSS_DASH_SPEED;
+            particles.add(new Particle(e.x - bossDashDirX * 34f, e.y - bossDashDirY * 34f,
+                    -bossDashDirX * 20f, -bossDashDirY * 20f,
+                    0.3f, 3f, 0.55f, 0.85f, 1f));
+        } else {
+            float radial = 0f;
+            if (dist > e.prefRange + 18f) radial = 1f;
+            else if (dist < e.prefRange - 18f) radial = -0.8f;
+            float strafe = (float) Math.sin(e.time * 0.45f) * 0.55f;
+            float inginX = (ux * radial - uy * strafe) * e.maxSpeed;
+            float inginY = (uy * radial + ux * strafe) * e.maxSpeed;
+            float ikuti = Math.min(1f, 2.2f * delta);
+            e.vx += (inginX - e.vx) * ikuti;
+            e.vy += (inginY - e.vy) * ikuti;
+            if (bossNosTimer <= 0f && dist > 90f && !player.dead) {
+                bossDashDirX = ux;
+                bossDashDirY = uy;
+                bossDashTime = BOSS_DASH_TIME;
+                bossNosTimer = 6.5f + (float) Math.random() * 2.5f;
+                e.facing = (float) Math.toDegrees(Math.atan2(uy, ux));
+            }
+        }
+        // Laser: jeda -> ancang-ancang (garis bidik mengikuti pemain) -> tembak
+        bossLaserT -= delta;
+        if (bossLaserPhase == 0) {
+            if (bossLaserT <= 0f) {
+                bossLaserPhase = 1;
+                bossLaserT = 0.8f;
+            }
+        } else if (bossLaserPhase == 1) {
+            bossLaserAngle = (float) Math.toDegrees(
+                    Math.atan2(player.y - e.y, player.x - e.x));
+            if (bossLaserT <= 0f) {
+                bossLaserPhase = 2;
+                bossLaserT = 0.5f;
+                tembakLaser(e, viewW, viewH);
+            }
+        } else {
+            if (bossLaserT <= 0f) {
+                bossLaserPhase = 0;
+                bossLaserT = 3.0f + (float) Math.random() * 1.2f;
+            }
+        }
+        // Bom tekanan tinggi berkala ke posisi pemain saat ini
+        bossBombTimer -= delta;
+        if (bossBombTimer <= 0f && !player.dead) {
+            bombs.add(new Bomb(e.x, e.y, player.x, player.y));
+            bossBombTimer = 2.8f + (float) Math.random() * 0.9f;
+        }
+    }
+
+    /** Laser ditembakkan: semua yang berada tepat di garis sinarnya kena LASER_DAMAGE. */
+    private void tembakLaser(Enemy e, float viewW, float viewH) {
+        float rad = (float) Math.toRadians(bossLaserAngle);
+        float ox = e.x + (float) Math.cos(rad) * e.radius;
+        float oy = e.y + (float) Math.sin(rad) * e.radius;
+        float ex = ox + (float) Math.cos(rad) * 460f;
+        float ey = oy + (float) Math.sin(rad) * 460f;
+        if (!player.dead
+                && jarakKeSegmen(player.x, player.y, ox, oy, ex, ey) < Player.RADIUS + 5f) {
+            if (player.damage(LASER_DAMAGE)) onPlayerHit(viewW, viewH);
+        }
+        if (partner != null && !partner.dead
+                && jarakKeSegmen(partner.x, partner.y, ox, oy, ex, ey) < Partner.RADIUS + 5f) {
+            partnerKena(LASER_DAMAGE);
+        }
+        for (Enemy lain : enemies) {
+            if (lain == e || lain.hp <= 0) continue;
+            if (jarakKeSegmen(lain.x, lain.y, ox, oy, ex, ey) < lain.radius + 4f) {
+                lain.damage(LASER_DAMAGE);
+            }
+        }
+    }
+
+    /** Jarak titik ke ruas garis (untuk uji kena laser). */
+    private static float jarakKeSegmen(float px, float py,
+                                       float ax, float ay, float bx, float by) {
+        float abx = bx - ax, aby = by - ay;
+        float t = ((px - ax) * abx + (py - ay) * aby) / (abx * abx + aby * aby);
+        t = Math.max(0f, Math.min(1f, t));
+        float cx = ax + abx * t, cy = ay + aby * t;
+        float dx = px - cx, dy = py - cy;
+        return (float) Math.sqrt(dx * dx + dy * dy);
+    }
+
+    /** Bom meledak: semua dalam radius kena BOMB_DAMAGE; kapal induk kebal bomnya sendiri. */
+    private void ledakanBom(float x, float y, float viewW, float viewH) {
+        explosion(x, y, true);
+        particles.add(new Particle(x, y, 0f, 0f, 0.3f, 16f, 1f, 0.75f, 0.4f));
+        if (!player.dead) {
+            float dx = player.x - x, dy = player.y - y;
+            float rr = BOMB_RADIUS + Player.RADIUS;
+            if (dx * dx + dy * dy < rr * rr) {
+                if (player.damage(BOMB_DAMAGE)) onPlayerHit(viewW, viewH);
+            }
+        }
+        if (partner != null && !partner.dead) {
+            float dx = partner.x - x, dy = partner.y - y;
+            float rr = BOMB_RADIUS + Partner.RADIUS;
+            if (dx * dx + dy * dy < rr * rr) {
+                partnerKena(BOMB_DAMAGE);
+            }
+        }
+        for (Enemy e : enemies) {
+            if (e.type == Enemy.MOTHERSHIP || e.hp <= 0) continue;
+            float dx = e.x - x, dy = e.y - y;
+            float rr = BOMB_RADIUS + e.radius;
+            if (dx * dx + dy * dy < rr * rr) {
+                e.damage(BOMB_DAMAGE);
+            }
+        }
+    }
+
     private void spawnEnemyBullet(Enemy e) {
         float dx = e.targetX - e.x;
         float dy = e.targetY - e.y;
@@ -729,6 +1004,7 @@ public class SpaceWarGame extends ApplicationAdapter {
     private void resetRun(float viewW, float viewH) {
         enemies.clear();
         bullets.clear();
+        bombs.clear();
         score = 0;
         elapsed = 0f;
         spawnTimer = 0.8f;
@@ -737,7 +1013,17 @@ public class SpaceWarGame extends ApplicationAdapter {
         nosCooldown = 0f;
         rockets.clear();
         rocketCooldown = 0f;
+        kapalInduk = null;
+        bossSpawned = false;
+        bossWarnTimer = 0f;
+        bossLaserPhase = 0;
+        bossLaserT = 0f;
         player.respawn(WORLD_W * 0.42f, WORLD_H / 2f);
+        if (partner != null) {
+            partner.respawn(WORLD_W * 0.42f - 30f, WORLD_H / 2f + 18f);
+        }
+        partnerFireTimer = 0f;
+        partnerRespawnTimer = 0f;
         camInit = false; // kamera langsung melompat ke pemain
         state = STATE_PLAY;
     }
@@ -849,14 +1135,56 @@ public class SpaceWarGame extends ApplicationAdapter {
                 }
             }
 
-            // Musuh: AI memilih sasaran & mengemudi, lalu bergerak & menembak
+            // Kapal induk: hanya SATU dalam setiap permainan — muncul
+            // sekali setelah BOSS_SPAWN_TIME detik, tidak pernah dua kali
+            if (!bossSpawned && elapsed >= BOSS_SPAWN_TIME) {
+                spawnKapalInduk();
+            }
+            if (bossWarnTimer > 0f) bossWarnTimer -= delta;
+
+            // Partner: formasi di sisi pemain + tembakan otomatis
+            updatePartner(delta);
+
+            // Musuh: AI memilih sasaran & mengemudi, lalu bergerak & menembak.
+            // Kapal induk memakai otaknya sendiri (laser, bom, NOS super).
             for (Enemy e : enemies) {
+                if (e.type == Enemy.MOTHERSHIP) {
+                    updateKapalInduk(e, delta, viewW, viewH);
+                    e.update(delta, WORLD_W, WORLD_H);
+                    continue;
+                }
                 updateEnemyAi(e, delta, WORLD_W, WORLD_H);
                 e.update(delta, WORLD_W, WORLD_H);
                 boolean engaged = e.hasTarget && e.targetDist <= 205f;
                 if (e.updateFire(delta, engaged)) {
                     spawnEnemyBullet(e);
                 }
+            }
+
+            // Bom kapal induk: meluncur ke titik sasaran, lalu meledak
+            for (Bomb b : bombs) {
+                b.time += delta;
+                float dx = b.targetX - b.x;
+                float dy = b.targetY - b.y;
+                float d = (float) Math.sqrt(dx * dx + dy * dy);
+                float langkah = BOMB_SPEED * delta;
+                if (d <= Math.max(langkah, 7f) || b.time > 3f) {
+                    ledakanBom(b.x, b.y, viewW, viewH);
+                    b.dead = true;
+                    continue;
+                }
+                b.x += dx / d * langkah;
+                b.y += dy / d * langkah;
+                if ((int) (b.time * 6f) % 2 == 0) {
+                    particles.add(new Particle(b.x, b.y,
+                            (float) (Math.random() * 4f - 2f),
+                            (float) (Math.random() * 4f - 2f),
+                            0.25f, 1.6f, 1f, 0.45f, 0.35f));
+                }
+            }
+            Iterator<Bomb> bitBom = bombs.iterator();
+            while (bitBom.hasNext()) {
+                if (bitBom.next().dead) bitBom.remove();
             }
 
             // Peluru bergerak (dibuang bila keluar dunia)
@@ -948,12 +1276,18 @@ public class SpaceWarGame extends ApplicationAdapter {
             while (eit.hasNext()) {
                 Enemy e = eit.next();
                 if (e.hp <= 0) {
-                    explosion(e.x, e.y, e.type == Enemy.GUNNER);
+                    explosion(e.x, e.y, e.type != Enemy.DRONE);
+                    if (e == kapalInduk) {
+                        kapalInduk = null;
+                        explosion(e.x, e.y, true);
+                    }
                     if (e.killedByPlayer) score += e.scoreValue;
                     eit.remove();
                     continue;
                 }
-                if (e.isGone(player.x, player.y, WORLD_W, WORLD_H)) {
+                // Kapal induk tidak pernah dibuang karena jauh dari pemain
+                if (e.type != Enemy.MOTHERSHIP
+                        && e.isGone(player.x, player.y, WORLD_W, WORLD_H)) {
                     eit.remove();
                     continue;
                 }
@@ -973,6 +1307,17 @@ public class SpaceWarGame extends ApplicationAdapter {
                         if (player.damage(RAM_DAMAGE)) onPlayerHit(viewW, viewH);
                     }
                 }
+                // Tabrakan badan musuh vs partner: kedua pihak kena
+                // RAM_DAMAGE juga (partner adalah pesawat satu tim).
+                if (partner != null && !partner.dead && !partner.isInvulnerable()) {
+                    float dx = e.x - partner.x;
+                    float dy = e.y - partner.y;
+                    float rr = e.radius + Partner.RADIUS;
+                    if (dx * dx + dy * dy < rr * rr) {
+                        if (e.damage(RAM_DAMAGE)) e.killedByPlayer = true;
+                        partnerKena(RAM_DAMAGE);
+                    }
+                }
             }
             // Peluru musuh vs pesawat DAN vs musuh lain (sesama alien bisa kena,
             // kecuali penembaknya sendiri)
@@ -985,6 +1330,16 @@ public class SpaceWarGame extends ApplicationAdapter {
                     if (dx * dx + dy * dy < rr * rr) {
                         b.dead = true;
                         if (player.damage(BULLET_DAMAGE)) onPlayerHit(viewW, viewH);
+                        continue;
+                    }
+                }
+                if (partner != null && !partner.dead && !partner.isInvulnerable()) {
+                    float dx = b.x - partner.x;
+                    float dy = b.y - partner.y;
+                    float rr = Partner.RADIUS + 3f;
+                    if (dx * dx + dy * dy < rr * rr) {
+                        b.dead = true;
+                        partnerKena(BULLET_DAMAGE);
                         continue;
                     }
                 }
@@ -1141,7 +1496,37 @@ public class SpaceWarGame extends ApplicationAdapter {
             batch.draw(rocketRegion, r.x - 15f, r.y - 6f, 15f, 6f,
                     30f, 12f, 1f, 1f, r.angle);
         }
+        // Bom kapal induk yang sedang meluncur ke sasarannya
+        for (Bomb b : bombs) {
+            batch.draw(bombTex, b.x - 9f, b.y - 9f, 18f, 18f);
+        }
+        // Laser kapal induk: garis bidik tipis berkedip saat
+        // ancang-ancang, sinar tebal menyala saat menembak
+        if (kapalInduk != null && kapalInduk.hp > 0 && bossLaserPhase > 0) {
+            float radL = (float) Math.toRadians(bossLaserAngle);
+            float ox = kapalInduk.x + (float) Math.cos(radL) * kapalInduk.radius;
+            float oy = kapalInduk.y + (float) Math.sin(radL) * kapalInduk.radius;
+            if (bossLaserPhase == 1) {
+                float kedip = 0.35f + 0.30f
+                        * (float) Math.abs(Math.sin(kapalInduk.time * 18f));
+                batch.setColor(1f, 0.25f, 0.20f, kedip);
+                batch.draw(whiteTex, ox, oy - 0.7f, 0f, 0.7f, 460f, 1.4f,
+                        1f, 1f, bossLaserAngle, 0, 0, 1, 1, false, false);
+            } else {
+                batch.setColor(1f, 0.30f, 0.22f, 0.40f);
+                batch.draw(whiteTex, ox, oy - 5f, 0f, 5f, 460f, 10f,
+                        1f, 1f, bossLaserAngle, 0, 0, 1, 1, false, false);
+                batch.setColor(1f, 0.55f, 0.45f, 0.75f);
+                batch.draw(whiteTex, ox, oy - 2.4f, 0f, 2.4f, 460f, 4.8f,
+                        1f, 1f, bossLaserAngle, 0, 0, 1, 1, false, false);
+                batch.setColor(1f, 1f, 1f, 0.95f);
+                batch.draw(whiteTex, ox, oy - 1f, 0f, 1f, 460f, 2f,
+                        1f, 1f, bossLaserAngle, 0, 0, 1, 1, false, false);
+            }
+            batch.setColor(1f, 1f, 1f, 1f);
+        }
         for (Enemy e : enemies) e.draw(batch, font, layout, WORLD_H);
+        if (partner != null) partner.draw(batch, font, layout, WORLD_H);
         player.draw(batch);
         for (Particle p : particles) {
             float a = Math.max(0f, p.life / p.maxLife);
@@ -1181,13 +1566,25 @@ public class SpaceWarGame extends ApplicationAdapter {
         font.draw(uiBatch, hpText, hpBarX + 6f * density,
                 hpBarY + hpBarH / 2f + layout.height / 2f);
 
-        // Total semua yang masih hidup (pemain + seluruh bot musuh)
+        // Total semua yang masih hidup (pemain + partner + seluruh bot
+        // musuh, kapal induk termasuk karena ia ada di daftar musuh)
         font.getData().setScale(1.1f * density);
         font.setColor(0.85f, 0.95f, 1f, 1f);
-        int totalHidup = enemies.size() + (player.dead ? 0 : 1);
+        int totalHidup = enemies.size() + (player.dead ? 0 : 1)
+                + (partner != null && !partner.dead ? 1 : 0);
         String hidupText = "TOTAL HIDUP: " + totalHidup;
         font.draw(uiBatch, hidupText, hpBarX,
                 hpBarY - 10f * density);
+
+        // Peringatan saat kapal induk muncul (berkedip, tengah atas)
+        if (bossWarnTimer > 0f && ((int) (bossWarnTimer * 3f)) % 2 == 0) {
+            font.getData().setScale(1.7f * density);
+            font.setColor(1f, 0.35f, 0.30f, 1f);
+            String waspada = "KAPAL INDUK MENDEKAT!";
+            layout.setText(font, waspada);
+            font.draw(uiBatch, waspada, (screenW - layout.width) / 2f,
+                    screenH - 120f * density);
+        }
 
         // Skor di kanan atas
         font.getData().setScale(1.7f * density);
@@ -1301,6 +1698,14 @@ public class SpaceWarGame extends ApplicationAdapter {
         uiBatch.draw(whiteTex, vwX + vwW - 1f, vwY, 1f, vwH);
         float titikM = 2.4f * density;
         for (Enemy e : enemies) {
+            if (e.type == Enemy.MOTHERSHIP) {
+                // Kapal induk: titik besar putih-merah, paling menonjol
+                float titikB = 5.2f * density;
+                uiBatch.setColor(1f, 0.92f, 0.88f, 1f);
+                uiBatch.draw(whiteTex, petaX + e.x * skalaPeta - titikB / 2f,
+                        petaY + e.y * skalaPeta - titikB / 2f, titikB, titikB);
+                continue;
+            }
             if (e.type == Enemy.GUNNER) uiBatch.setColor(1f, 0.38f, 0.30f, 0.95f);
             else uiBatch.setColor(0.95f, 0.45f, 0.90f, 0.95f);
             uiBatch.draw(whiteTex, petaX + e.x * skalaPeta - titikM / 2f,
@@ -1310,6 +1715,12 @@ public class SpaceWarGame extends ApplicationAdapter {
         uiBatch.setColor(0.55f, 0.95f, 1f, 1f);
         uiBatch.draw(whiteTex, petaX + player.x * skalaPeta - titikP / 2f,
                 petaY + player.y * skalaPeta - titikP / 2f, titikP, titikP);
+        if (partner != null && !partner.dead) {
+            float titikT = 2.6f * density;
+            uiBatch.setColor(0.45f, 1f, 0.80f, 1f);
+            uiBatch.draw(whiteTex, petaX + partner.x * skalaPeta - titikT / 2f,
+                    petaY + partner.y * skalaPeta - titikT / 2f, titikT, titikT);
+        }
         uiBatch.setColor(1f, 1f, 1f, 1f);
 
         // Tulisan GAME OVER
@@ -1348,6 +1759,8 @@ public class SpaceWarGame extends ApplicationAdapter {
         if (whiteTex != null) whiteTex.dispose();
         if (softDotTex != null) softDotTex.dispose();
         if (player != null) player.dispose();
+        if (partner != null) partner.dispose();
+        if (bombTex != null) bombTex.dispose();
         Enemy.disposeShared();
     }
 }

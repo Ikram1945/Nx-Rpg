@@ -23,6 +23,19 @@ tapi masih tersimpan di `assets/`.
   beruntun 3x, 100 poin.
 - **Gunner** (merah): lambat & tebal, HP 50, tembakan tunggal
   terarah, 250 poin.
+- **Kapal induk** (boss raksasa): hanya **SATU dalam setiap
+  permainan**, muncul sekali setelah ±45 detik dengan peringatan
+  "KAPAL INDUK MENDEKAT!". HP **500**, 2000 poin. Senjatanya:
+  **laser** berkala (ada garis bidik ancang-ancang 0,8 detik —
+  hindari garisnya!), **bom tekanan tinggi** beradius ledak besar,
+  dan **NOS super** untuk menerjang lurus ke arahmu. Damage-nya
+  tetap angka tercatat: laser **20**, bom **20**.
+- **Partner** (pesawat teman berwarna hijau toska): AI yang terbang
+  dalam formasi di sisimu dan **menembak otomatis** musuh terdekat —
+  membasmi musuh bersamamu, dan bunuhannya ikut jadi skormu. HP
+  **50**; bila hancur, ia muncul lagi di sisimu setelah 6 detik.
+  (Rencana masa depan: partner bisa dipasang/dilepas; sekarang ia
+  selalu ikut.)
 - Semua musuh adalah **bot AI**: mereka memilih lawan terdekat — bisa
   kamu, bisa alien lain (sesama alien saling serang!) — lalu menjaga
   jarak tempur sambil menyamping dan menembak sasarannya. Musuh yang

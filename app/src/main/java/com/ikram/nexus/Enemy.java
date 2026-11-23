@@ -28,6 +28,10 @@ public class Enemy {
 
     public static final int DRONE = 0;
     public static final int GUNNER = 1;
+    /** Kapal induk (boss): raksasa bersenjata laser & bom, HP 500.
+     *  Hanya SATU dalam setiap permainan — kemunculan & senjatanya
+     *  diatur SpaceWarGame. */
+    public static final int MOTHERSHIP = 2;
 
     private static Texture[] sharedTextures;
     private static TextureRegion[] sharedRegions;
@@ -35,11 +39,12 @@ public class Enemy {
 
     private static void ensureTextures() {
         if (sharedTextures != null) return;
-        sharedTextures = new Texture[2];
-        sharedRegions = new TextureRegion[2];
+        sharedTextures = new Texture[3];
+        sharedRegions = new TextureRegion[3];
         sharedTextures[DRONE] = buildDroneTexture();
         sharedTextures[GUNNER] = buildGunnerTexture();
-        for (int i = 0; i < 2; i++) {
+        sharedTextures[MOTHERSHIP] = buildMothershipTexture();
+        for (int i = 0; i < 3; i++) {
             sharedRegions[i] = new TextureRegion(sharedTextures[i]);
         }
         Pixmap pm = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
@@ -121,6 +126,58 @@ public class Enemy {
         return SpriteArt.toTexture(pm);
     }
 
+    // ---------- Kapal induk: lambung raksasa berinti besar (kanvas 416x288, hidung ke kiri) ----------
+
+    private static Texture buildMothershipTexture() {
+        Pixmap pm = new Pixmap(416, 288, Pixmap.Format.RGBA8888);
+        Color outline = SpriteArt.col(30, 26, 44, 1f);
+        Color baja = SpriteArt.col(88, 84, 116, 1f);
+        Color bajaGelap = SpriteArt.col(58, 54, 84, 1f);
+        // Polong mesin belakang (kanan) atas & bawah + cahaya mesin
+        SpriteArt.fillEllipse(pm, 356, 62, 52, 26, outline);
+        SpriteArt.fillEllipse(pm, 356, 62, 46, 21, bajaGelap);
+        SpriteArt.fillEllipse(pm, 356, 226, 52, 26, outline);
+        SpriteArt.fillEllipse(pm, 356, 226, 46, 21, bajaGelap);
+        SpriteArt.fillEllipse(pm, 388, 62, 14, 8, SpriteArt.col(120, 230, 255, 0.9f));
+        SpriteArt.fillEllipse(pm, 388, 226, 14, 8, SpriteArt.col(120, 230, 255, 0.9f));
+        // Sayap besar menyapu ke belakang
+        SpriteArt.fillPoly(pm, new float[]{150, 108, 330, 30, 372, 44, 240, 128}, bajaGelap);
+        SpriteArt.fillPoly(pm, new float[]{150, 180, 330, 258, 372, 244, 240, 160}, bajaGelap);
+        SpriteArt.fillPoly(pm, new float[]{150, 108, 318, 40, 240, 122}, baja);
+        SpriteArt.fillPoly(pm, new float[]{150, 180, 318, 248, 240, 166}, baja);
+        // Lambung utama: tepi gelap lalu isi baja
+        float[] hull = {26, 144, 84, 92, 196, 66, 300, 84, 330, 144, 300, 204, 196, 222, 84, 196};
+        SpriteArt.fillPoly(pm, SpriteArt.scaled(hull, 208, 144, 1.045f), outline);
+        SpriteArt.fillPoly(pm, hull, baja);
+        SpriteArt.fillPoly(pm, new float[]{26, 144, 330, 144, 300, 204, 196, 222, 84, 196},
+                SpriteArt.col(40, 38, 62, 0.45f));
+        SpriteArt.fillPoly(pm, new float[]{84, 92, 196, 66, 300, 84, 330, 144, 240, 96, 120, 96, 60, 128},
+                SpriteArt.col(255, 255, 255, 0.13f));
+        // Garis panel lambung
+        SpriteArt.fillPoly(pm, new float[]{150, 76, 156, 76, 156, 212, 150, 212}, SpriteArt.col(20, 18, 34, 0.35f));
+        SpriteArt.fillPoly(pm, new float[]{238, 80, 244, 80, 244, 208, 238, 208}, SpriteArt.col(20, 18, 34, 0.30f));
+        // Kubah meriam atas & bawah (sumber laser di hidung kiri)
+        SpriteArt.fillEllipse(pm, 92, 96, 26, 18, outline);
+        SpriteArt.fillEllipse(pm, 92, 96, 21, 14, SpriteArt.col(150, 60, 70, 1f));
+        SpriteArt.fillEllipse(pm, 92, 192, 26, 18, outline);
+        SpriteArt.fillEllipse(pm, 92, 192, 21, 14, SpriteArt.col(150, 60, 70, 1f));
+        // Moncong laser di hidung (kiri)
+        SpriteArt.fillEllipse(pm, 30, 144, 15, 15, outline);
+        SpriteArt.fillEllipse(pm, 30, 144, 10, 10, SpriteArt.col(255, 70, 60, 1f));
+        SpriteArt.fillEllipse(pm, 30, 144, 4.5f, 4.5f, SpriteArt.col(255, 255, 255, 1f));
+        // Inti tenaga raksasa berlapis di tengah
+        SpriteArt.fillEllipse(pm, 208, 144, 46, 46, outline);
+        SpriteArt.fillEllipse(pm, 208, 144, 38, 38, SpriteArt.col(255, 120, 50, 1f));
+        SpriteArt.fillEllipse(pm, 208, 144, 25, 25, SpriteArt.col(255, 200, 80, 1f));
+        SpriteArt.fillEllipse(pm, 208, 144, 11, 11, SpriteArt.col(255, 255, 255, 1f));
+        // Lampu-lampu lambung
+        float[][] lampu = {{110, 128}, {110, 160}, {272, 108}, {272, 180}, {180, 92}, {180, 196}};
+        for (float[] l : lampu) {
+            SpriteArt.fillEllipse(pm, l[0], l[1], 4.5f, 4.5f, SpriteArt.col(255, 90, 80, 0.95f));
+        }
+        return SpriteArt.toTexture(pm);
+    }
+
     // ---------- Keadaan bot ----------
 
     public final int type;
@@ -167,7 +224,16 @@ public class Enemy {
         phase = (float) (Math.random() * Math.PI * 2.0);
         retargetTimer = (float) Math.random() * 0.5f;
         strafeDir = Math.random() < 0.5 ? -1 : 1;
-        if (type == GUNNER) {
+        if (type == MOTHERSHIP) {
+            hp = maxHp = 500;
+            radius = 30f;
+            scoreValue = 2000;
+            maxSpeed = 24f;
+            cruise = 14f;
+            prefRange = 215f;
+            turnRate = 55f;
+            fireCooldown = 3.0f;
+        } else if (type == GUNNER) {
             hp = maxHp = 50;
             radius = 10.5f;
             scoreValue = 250;
@@ -258,7 +324,10 @@ public class Enemy {
         // Sprite digambar berputar sebesar sudut hadap, berporos di tengah.
         // Gambar aslinya menghadap KIRI, jadi putarannya facing + 180.
         float rot = facing + 180f;
-        if (type == GUNNER) {
+        if (type == MOTHERSHIP) {
+            batch.draw(sharedRegions[type], x - 52f, y - 36f,
+                    52f, 36f, 104f, 72f, 1f, 1f, rot);
+        } else if (type == GUNNER) {
             batch.draw(sharedRegions[type], x - 19f, y - 14.25f,
                     19f, 14.25f, 38f, 28.5f, 1f, 1f, rot);
         } else {
