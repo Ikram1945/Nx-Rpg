@@ -44,8 +44,15 @@ tapi masih tersimpan di `assets/`.
   ledakan kecepatan **2,1x selama 1,6 detik** dengan jejak cahaya di
   ekor pesawat. Setelah dipakai ada **cooldown 4 detik** — tombol
   tertutup sapuan gelap dan menampilkan angka detik yang tersisa.
+- **Tombol roket / RKT** (merah, ikon roket) di kiri tombol tembak:
+  meluncurkan **roket pemburu auto-aim** — mengunci musuh terdekat dan
+  mengejarnya sambil berbelok, dengan jejak asap. Ledakannya besar:
+  sasaran utama kena 2 damage (drone langsung hancur) dan musuh dalam
+  radius percikan kena 1 damage. Bila sasarannya gugur di tengah jalan,
+  roket mengunci musuh terdekat lain. **Cooldown 5 detik** dengan
+  indikator sapuan + angka detik seperti tombol NOS.
 - Di desktop: WASD / tombol panah untuk bergerak, SPASI untuk menembak,
-  SHIFT untuk NOS.
+  SHIFT untuk NOS, E untuk roket.
 
 ## Penampil error (anti force close diam-diam)
 
