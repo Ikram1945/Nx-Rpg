@@ -122,7 +122,47 @@ public class SpaceWarGame extends ApplicationAdapter {
 
     private static final int STATE_PLAY = 0;
     private static final int STATE_OVER = 1;
-    private int state = STATE_PLAY;
+    private static final int STATE_MENU = 2;
+    private static final int STATE_UPGRADE_PLAYER = 3;
+    private static final int STATE_UPGRADE_PARTNER = 4;
+    private static final int STATE_TOKO = 5;
+    private static final int MAX_LEVEL = 5;
+    private int state = STATE_MENU;
+
+    // Dompet & kemajuan (tersimpan di Preferences): koin didapat dari
+    // menghancurkan musuh, dibelanjakan di toko & upgrade.
+    private int koin;
+    private int koinRun;
+    private final int[] upPlayer = new int[3];
+    private final int[] upPartner = new int[3];
+    private final int[] itemToko = new int[3];
+    private float fireFactor = 1f;
+    private float partnerFireFactor = 1f;
+    private int partnerBulletDamage = BULLET_DAMAGE;
+    private float rocketCooldownFactor = 1f;
+    private static final String[] NAMA_UP_PLAYER = {"Badan Kuat", "Pemicu Cepat", "Mesin Kencang"};
+    private static final String[] KET_UP_PLAYER = {
+            "Darah maks +50 per level", "Tembakan 12% lebih cepat per level",
+            "Terbang 8% lebih cepat per level"};
+    private static final int[] BIAYA_UP_PLAYER = {100, 120, 120};
+    private static final String[] NAMA_UP_PARTNER = {"Badan Partner", "Senjata Partner", "Pemicu Partner"};
+    private static final String[] KET_UP_PARTNER = {
+            "Darah partner +25 per level", "Damage peluru partner +5 per level",
+            "Tembakan partner 12% lebih cepat per level"};
+    private static final int[] BIAYA_UP_PARTNER = {80, 100, 80};
+    private static final String[] NAMA_ITEM = {"Perisai Awal", "Nyawa Cadangan", "Booster Roket"};
+    private static final String[] KET_ITEM = {
+            "Kebal 8 detik di awal permainan berikutnya",
+            "Hidup lagi sekali dengan setengah darah saat hancur",
+            "Jeda roket separuh pada permainan berikutnya"};
+    private static final int[] HARGA_ITEM = {150, 300, 100};
+    private boolean dompetDimuat;
+    // Tata letak menu (piksel layar, dihitung layoutMenu tiap frame menu)
+    private final float[][] rectMenu = new float[4][4];
+    private final float[][] rectBaris = new float[3][4];
+    private final float[] rectKembali = new float[4];
+    private String pesanMenu = "";
+    private float pesanTimer;
     private float overTimer;
     private float elapsed;
     private float spawnTimer = 0.8f;
@@ -166,6 +206,8 @@ public class SpaceWarGame extends ApplicationAdapter {
         float x, y, vx, vy;
         boolean friendly;
         boolean dead;
+        /** Damage peluru ini (peluru partner bisa lebih kuat lewat upgrade). */
+        int dmg = BULLET_DAMAGE;
         /** Penembaknya untuk peluru musuh (agar tidak kena dirinya sendiri). */
         Enemy owner;
         Bullet(float x, float y, float vx, float vy, boolean friendly, Enemy owner) {
@@ -391,6 +433,14 @@ public class SpaceWarGame extends ApplicationAdapter {
         }
         if (bombTex == null) {
             bombTex = makeBombTexture();
+        }
+        if (!dompetDimuat) {
+            // Pertama kali: muat kemajuan tersimpan, lalu tampilkan
+            // MENU UTAMA (game tidak lagi langsung mulai bermain)
+            dompetDimuat = true;
+            muatDompet();
+            terapkanUpgrade();
+            keMenu();
         }
     }
 
@@ -839,10 +889,12 @@ public class SpaceWarGame extends ApplicationAdapter {
             if (jrk <= PARTNER_RANGE && partnerFireTimer <= 0f) {
                 float ang = (float) Math.atan2(sasaran.y - partner.y, sasaran.x - partner.x)
                         + (float) (Math.random() * 2.0 - 1.0) * 0.03f;
-                bullets.add(new Bullet(partner.gunX(), partner.gunY(),
+                Bullet pb = new Bullet(partner.gunX(), partner.gunY(),
                         (float) Math.cos(ang) * PLAYER_BULLET_SPEED,
-                        (float) Math.sin(ang) * PLAYER_BULLET_SPEED, true, null));
-                partnerFireTimer = PARTNER_FIRE_INTERVAL;
+                        (float) Math.sin(ang) * PLAYER_BULLET_SPEED, true, null);
+                pb.dmg = partnerBulletDamage;
+                bullets.add(pb);
+                partnerFireTimer = PARTNER_FIRE_INTERVAL * partnerFireFactor;
             }
         }
     }
@@ -1026,10 +1078,12 @@ public class SpaceWarGame extends ApplicationAdapter {
     }
 
     private void resetRun(float viewW, float viewH) {
+        terapkanUpgrade();
         enemies.clear();
         bullets.clear();
         bombs.clear();
         score = 0;
+        koinRun = 0;
         elapsed = 0f;
         spawnTimer = 0.8f;
         fireTimer = 0f;
@@ -1048,6 +1102,20 @@ public class SpaceWarGame extends ApplicationAdapter {
         }
         partnerFireTimer = 0f;
         partnerRespawnTimer = 0f;
+        // Barang toko yang berlaku satu permainan: pakai sekarang
+        rocketCooldownFactor = 1f;
+        boolean dompetBerubah = false;
+        if (itemToko[0] > 0) {
+            itemToko[0]--;
+            player.shieldTime = 8f;
+            dompetBerubah = true;
+        }
+        if (itemToko[2] > 0) {
+            itemToko[2]--;
+            rocketCooldownFactor = 0.5f;
+            dompetBerubah = true;
+        }
+        if (dompetBerubah) simpanDompet();
         camInit = false; // kamera langsung melompat ke pemain
         state = STATE_PLAY;
     }
@@ -1057,6 +1125,306 @@ public class SpaceWarGame extends ApplicationAdapter {
             hiScore = score;
             prefs.putInteger("hi", hiScore);
             prefs.flush();
+        }
+        simpanDompet();
+    }
+
+    /** Memuat koin, level upgrade & stok barang dari Preferences. */
+    private void muatDompet() {
+        if (prefs == null) return;
+        koin = prefs.getInteger("koin", 0);
+        for (int i = 0; i < 3; i++) {
+            upPlayer[i] = prefs.getInteger("upP" + i, 0);
+            upPartner[i] = prefs.getInteger("upT" + i, 0);
+            itemToko[i] = prefs.getInteger("item" + i, 0);
+        }
+    }
+
+    /** Menyimpan koin, level upgrade & stok barang ke Preferences. */
+    private void simpanDompet() {
+        if (prefs == null) return;
+        prefs.putInteger("koin", koin);
+        for (int i = 0; i < 3; i++) {
+            prefs.putInteger("upP" + i, upPlayer[i]);
+            prefs.putInteger("upT" + i, upPartner[i]);
+            prefs.putInteger("item" + i, itemToko[i]);
+        }
+        prefs.flush();
+    }
+
+    /** Menerapkan level upgrade ke faktor-faktor permainan & pesawat. */
+    private void terapkanUpgrade() {
+        fireFactor = (float) Math.pow(0.88, upPlayer[1]);
+        partnerFireFactor = (float) Math.pow(0.88, upPartner[2]);
+        partnerBulletDamage = BULLET_DAMAGE + 5 * upPartner[1];
+        if (player != null) {
+            player.hpBonus = 50 * upPlayer[0];
+            player.speedFactor = 1f + 0.08f * upPlayer[2];
+        }
+        if (partner != null) {
+            partner.hpBonus = 25 * upPartner[0];
+        }
+    }
+
+    /** Kembali ke menu utama: bersihkan arena, parkir pesawat di tengah. */
+    private void keMenu() {
+        enemies.clear();
+        bullets.clear();
+        rockets.clear();
+        bombs.clear();
+        kapalInduk = null;
+        bossSpawned = false;
+        bossWarnTimer = 0f;
+        if (player != null) {
+            player.respawn(WORLD_W / 2f, WORLD_H / 2f);
+            if (partner != null) {
+                partner.respawn(WORLD_W / 2f - 44f, WORLD_H / 2f + 26f);
+            }
+        }
+        if (camera != null) {
+            camera.position.set(WORLD_W / 2f, WORLD_H / 2f, 0f);
+        }
+        simpanDompet();
+        state = STATE_MENU;
+    }
+
+    private boolean diMenu() {
+        return state == STATE_MENU || state == STATE_UPGRADE_PLAYER
+                || state == STATE_UPGRADE_PARTNER || state == STATE_TOKO;
+    }
+
+    // ================= MENU UTAMA, TOKO & UPGRADE =================
+
+    /** Tata letak menu (piksel layar; rect[1] = tepi ATAS tombol). */
+    private void layoutMenu(float density, float screenW, float screenH) {
+        float bw = Math.min(300f * density, screenW * 0.82f);
+        float bh = 50f * density;
+        float bx = (screenW - bw) / 2f;
+        float atas = screenH * 0.44f;
+        for (int i = 0; i < 4; i++) {
+            rectMenu[i][0] = bx;
+            rectMenu[i][1] = atas - i * 64f * density;
+            rectMenu[i][2] = bw;
+            rectMenu[i][3] = bh;
+        }
+        float rw = Math.min(460f * density, screenW * 0.94f);
+        float rh = 62f * density;
+        float rx = (screenW - rw) / 2f;
+        float rAtas = screenH - 168f * density;
+        for (int i = 0; i < 3; i++) {
+            rectBaris[i][0] = rx;
+            rectBaris[i][1] = rAtas - i * 76f * density;
+            rectBaris[i][2] = rw;
+            rectBaris[i][3] = rh;
+        }
+        rectKembali[0] = (screenW - 180f * density) / 2f;
+        rectKembali[1] = 76f * density;
+        rectKembali[2] = 180f * density;
+        rectKembali[3] = 46f * density;
+    }
+
+    private static boolean kena(float[] r, float px, float py) {
+        return px >= r[0] && px <= r[0] + r[2] && py <= r[1] && py >= r[1] - r[3];
+    }
+
+    /** Input menu: sentuhan/klik di HP, tombol papan ketik di desktop. */
+    private void tanganiMenu(float viewW, float viewH) {
+        float density = Gdx.graphics.getDensity();
+        float screenW = Gdx.graphics.getWidth();
+        float screenH = Gdx.graphics.getHeight();
+        layoutMenu(density, screenW, screenH);
+        if (state == STATE_MENU) {
+            if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+                resetRun(viewW, viewH);
+                return;
+            }
+        } else {
+            if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)
+                    || Gdx.input.isKeyJustPressed(Input.Keys.BACKSPACE)) {
+                state = STATE_MENU;
+                return;
+            }
+            for (int i = 0; i < 3; i++) {
+                if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_1 + i)) {
+                    if (state == STATE_TOKO) beliItem(i);
+                    else beliUpgrade(i);
+                }
+            }
+        }
+        if (Gdx.input.justTouched()) {
+            float tx = Gdx.input.getX();
+            float ty = screenH - Gdx.input.getY();
+            if (state == STATE_MENU) {
+                if (kena(rectMenu[0], tx, ty)) resetRun(viewW, viewH);
+                else if (kena(rectMenu[1], tx, ty)) state = STATE_TOKO;
+                else if (kena(rectMenu[2], tx, ty)) state = STATE_UPGRADE_PLAYER;
+                else if (kena(rectMenu[3], tx, ty)) state = STATE_UPGRADE_PARTNER;
+            } else {
+                if (kena(rectKembali, tx, ty)) {
+                    state = STATE_MENU;
+                    return;
+                }
+                for (int i = 0; i < 3; i++) {
+                    if (kena(rectBaris[i], tx, ty)) {
+                        if (state == STATE_TOKO) beliItem(i);
+                        else beliUpgrade(i);
+                    }
+                }
+            }
+        }
+    }
+
+    private void pesan(String teks) {
+        pesanMenu = teks;
+        pesanTimer = 2.2f;
+    }
+
+    private void beliUpgrade(int i) {
+        boolean untukPlayer = state == STATE_UPGRADE_PLAYER;
+        int[] level = untukPlayer ? upPlayer : upPartner;
+        int[] biaya = untukPlayer ? BIAYA_UP_PLAYER : BIAYA_UP_PARTNER;
+        if (level[i] >= MAX_LEVEL) {
+            pesan("Sudah level MAKS");
+            return;
+        }
+        int harga = biaya[i] * (level[i] + 1);
+        if (koin < harga) {
+            pesan("Koin tidak cukup");
+            return;
+        }
+        koin -= harga;
+        level[i]++;
+        terapkanUpgrade();
+        simpanDompet();
+        pesan("Berhasil ditingkatkan!");
+    }
+
+    private void beliItem(int i) {
+        if (koin < HARGA_ITEM[i]) {
+            pesan("Koin tidak cukup");
+            return;
+        }
+        koin -= HARGA_ITEM[i];
+        itemToko[i]++;
+        simpanDompet();
+        pesan("Barang dibeli: " + NAMA_ITEM[i]);
+    }
+
+    /** Teks rata tengah (cx, cy = titik tengah teks). */
+    private void teksTengah(String teks, float cx, float cy, float skala,
+                            float r, float g, float b) {
+        font.getData().setScale(skala);
+        font.setColor(r, g, b, 1f);
+        layout.setText(font, teks);
+        font.draw(uiBatch, teks, cx - layout.width / 2f, cy + layout.height / 2f);
+        font.setColor(1f, 1f, 1f, 1f);
+    }
+
+    /** Teks rata kiri (x = tepi kiri, cy = tengah vertikal teks). */
+    private void teksKiri(String teks, float x, float cy, float skala,
+                          float r, float g, float b) {
+        font.getData().setScale(skala);
+        font.setColor(r, g, b, 1f);
+        layout.setText(font, teks);
+        font.draw(uiBatch, teks, x, cy + layout.height / 2f);
+        font.setColor(1f, 1f, 1f, 1f);
+    }
+
+    private void gambarTombol(float[] r, String label, float density, boolean utama) {
+        float x = r[0], yAtas = r[1], w = r[2], h = r[3];
+        if (utama) uiBatch.setColor(0.30f, 0.75f, 0.45f, 0.95f);
+        else uiBatch.setColor(0.45f, 0.75f, 1f, 0.90f);
+        uiBatch.draw(whiteTex, x - 2f, yAtas - h - 2f, w + 4f, h + 4f);
+        uiBatch.setColor(0.05f, 0.08f, 0.14f, 0.92f);
+        uiBatch.draw(whiteTex, x, yAtas - h, w, h);
+        uiBatch.setColor(1f, 1f, 1f, 1f);
+        teksTengah(label, x + w / 2f, yAtas - h / 2f, 1.25f * density, 1f, 1f, 1f);
+    }
+
+    /** Satu baris dagangan di layar toko / upgrade. */
+    private void gambarBaris(int i, float density) {
+        float[] r = rectBaris[i];
+        float x = r[0], yAtas = r[1], w = r[2], h = r[3];
+        uiBatch.setColor(0.45f, 0.75f, 1f, 0.55f);
+        uiBatch.draw(whiteTex, x - 1.5f, yAtas - h - 1.5f, w + 3f, h + 3f);
+        uiBatch.setColor(0.05f, 0.08f, 0.14f, 0.90f);
+        uiBatch.draw(whiteTex, x, yAtas - h, w, h);
+        uiBatch.setColor(1f, 1f, 1f, 1f);
+        String nama, ket, kanan;
+        boolean mampu;
+        if (state == STATE_TOKO) {
+            nama = NAMA_ITEM[i];
+            ket = KET_ITEM[i] + "  (punya: " + itemToko[i] + ")";
+            kanan = HARGA_ITEM[i] + " KOIN";
+            mampu = koin >= HARGA_ITEM[i];
+        } else {
+            boolean untukPlayer = state == STATE_UPGRADE_PLAYER;
+            int[] level = untukPlayer ? upPlayer : upPartner;
+            int[] biaya = untukPlayer ? BIAYA_UP_PLAYER : BIAYA_UP_PARTNER;
+            nama = (untukPlayer ? NAMA_UP_PLAYER : NAMA_UP_PARTNER)[i]
+                    + "  Lv." + level[i] + "/" + MAX_LEVEL;
+            ket = (untukPlayer ? KET_UP_PLAYER : KET_UP_PARTNER)[i];
+            if (level[i] >= MAX_LEVEL) {
+                kanan = "MAKS";
+                mampu = false;
+            } else {
+                int harga = biaya[i] * (level[i] + 1);
+                kanan = "BELI " + harga;
+                mampu = koin >= harga;
+            }
+        }
+        teksKiri(nama, x + 14f * density, yAtas - 20f * density,
+                1.15f * density, 1f, 1f, 1f);
+        teksKiri(ket, x + 14f * density, yAtas - 44f * density,
+                0.85f * density, 0.75f, 0.85f, 1f);
+        float bw = 118f * density;
+        float bx = x + w - bw - 10f * density;
+        float by = yAtas - h + 10f * density;
+        float bh = h - 20f * density;
+        if (mampu) uiBatch.setColor(0.30f, 0.75f, 0.45f, 0.95f);
+        else uiBatch.setColor(0.35f, 0.38f, 0.45f, 0.95f);
+        uiBatch.draw(whiteTex, bx, by, bw, bh);
+        uiBatch.setColor(1f, 1f, 1f, 1f);
+        teksTengah(kanan, bx + bw / 2f, by + bh / 2f, 1.0f * density, 1f, 1f, 1f);
+    }
+
+    /** Menggambar layar menu sesuai keadaan (utama / toko / upgrade). */
+    private void gambarMenu(float density, float screenW, float screenH) {
+        layoutMenu(density, screenW, screenH);
+        if (state == STATE_MENU) {
+            teksTengah("SPACE WAR", screenW / 2f, screenH - 64f * density,
+                    3.4f * density, 0.55f, 0.85f, 1f);
+            // Gambar pesawat pemain besar di tengah atas
+            if (player != null) {
+                float lebar = 180f * density;
+                float tinggi = lebar / 2f;
+                float cx = screenW / 2f;
+                float cy = screenH - 158f * density;
+                uiBatch.setColor(1f, 1f, 1f, 1f);
+                uiBatch.draw(player.teksturMenu(),
+                        cx - lebar / 2f, cy - tinggi / 2f, lebar, tinggi);
+            }
+            teksTengah("KOIN: " + koin, screenW / 2f, screenH - 224f * density,
+                    1.3f * density, 1f, 0.85f, 0.35f);
+            String[] label = {"MULAI PERMAINAN", "TOKO", "UPGRADE PLAYER", "UPGRADE PARTNER"};
+            for (int i = 0; i < 4; i++) {
+                gambarTombol(rectMenu[i], label[i], density, i == 0);
+            }
+            teksTengah("HI-SCORE " + String.format(Locale.US, "%06d", hiScore),
+                    screenW / 2f, 24f * density, 0.95f * density, 0.75f, 0.85f, 1f);
+        } else {
+            String judul = state == STATE_TOKO ? "TOKO"
+                    : state == STATE_UPGRADE_PLAYER ? "UPGRADE PLAYER" : "UPGRADE PARTNER";
+            teksTengah(judul, screenW / 2f, screenH - 56f * density,
+                    2.4f * density, 0.55f, 0.85f, 1f);
+            teksTengah("KOIN: " + koin, screenW / 2f, screenH - 100f * density,
+                    1.2f * density, 1f, 0.85f, 0.35f);
+            for (int i = 0; i < 3; i++) gambarBaris(i, density);
+            gambarTombol(rectKembali, "KEMBALI", density, false);
+        }
+        if (pesanTimer > 0f) {
+            teksTengah(pesanMenu, screenW / 2f, 104f * density,
+                    1.15f * density, 1f, 0.95f, 0.6f);
         }
     }
 
@@ -1100,7 +1468,11 @@ public class SpaceWarGame extends ApplicationAdapter {
 
         if (hitFlash > 0f) hitFlash -= delta;
 
-        if (state == STATE_PLAY) {
+        if (diMenu()) {
+            // Menu utama / toko / upgrade: dunia diam, hanya input menu
+            tanganiMenu(viewW, viewH);
+            if (pesanTimer > 0f) pesanTimer -= delta;
+        } else if (state == STATE_PLAY) {
             elapsed += delta;
 
             // NOS: tekan tombol/SHIFT saat jeda habis -> ledakan kecepatan
@@ -1155,7 +1527,7 @@ public class SpaceWarGame extends ApplicationAdapter {
                 bullets.add(new Bullet(player.gunX(), player.gunY(),
                         (float) Math.cos(rad) * PLAYER_BULLET_SPEED,
                         (float) Math.sin(rad) * PLAYER_BULLET_SPEED, true, null));
-                fireTimer = FIRE_INTERVAL;
+                fireTimer = FIRE_INTERVAL * fireFactor;
             }
 
             // Skill roket (tombol roket / E): luncurkan roket pemburu,
@@ -1163,7 +1535,7 @@ public class SpaceWarGame extends ApplicationAdapter {
             if (rocketCooldown > 0f) rocketCooldown -= delta;
             if (rocketHeld && rocketCooldown <= 0f && !player.dead) {
                 luncurkanRoket();
-                rocketCooldown = ROCKET_COOLDOWN;
+                rocketCooldown = ROCKET_COOLDOWN * rocketCooldownFactor;
             }
 
             // Gelombang musuh (maksimal 7 bot hidup bersamaan)
@@ -1249,7 +1621,7 @@ public class SpaceWarGame extends ApplicationAdapter {
                     float rr = e.radius + 3f;
                     if (dx * dx + dy * dy < rr * rr) {
                         b.dead = true;
-                        if (e.damage(BULLET_DAMAGE)) e.killedByPlayer = true;
+                        if (e.damage(b.dmg)) e.killedByPlayer = true;
                         break;
                     }
                 }
@@ -1324,7 +1696,11 @@ public class SpaceWarGame extends ApplicationAdapter {
                         kapalInduk = null;
                         explosion(e.x, e.y, true);
                     }
-                    if (e.killedByPlayer) score += e.scoreValue;
+                    if (e.killedByPlayer) {
+                        score += e.scoreValue;
+                        koin += e.coinValue;
+                        koinRun += e.coinValue;
+                    }
                     eit.remove();
                     continue;
                 }
@@ -1345,6 +1721,9 @@ public class SpaceWarGame extends ApplicationAdapter {
                             e.killedByPlayer = true;
                             explosion(e.x, e.y, e.type == Enemy.GUNNER);
                             score += e.scoreValue;
+                            koin += e.coinValue;
+                            koinRun += e.coinValue;
+                            if (e == kapalInduk) kapalInduk = null;
                             eit.remove();
                         }
                         if (player.damage(RAM_DAMAGE)) onPlayerHit(viewW, viewH);
@@ -1410,7 +1789,7 @@ public class SpaceWarGame extends ApplicationAdapter {
                 e.update(delta, WORLD_W, WORLD_H);
             }
             overTimer -= delta;
-            if (overTimer <= 0f) resetRun(viewW, viewH);
+            if (overTimer <= 0f) keMenu();
         }
 
         // Kamera mengikuti pemain (dijepit ke batas dunia) + paralaks latar:
@@ -1478,6 +1857,15 @@ public class SpaceWarGame extends ApplicationAdapter {
         hitFlash = 0.3f;
         explosion(player.x, player.y, false);
         if (player.dead) {
+            // Nyawa Cadangan dari toko: hidup lagi sekali, tidak jadi game over
+            if (itemToko[1] > 0) {
+                itemToko[1]--;
+                simpanDompet();
+                player.revive();
+                explosion(player.x, player.y, true);
+                hitFlash = 0.6f;
+                return;
+            }
             explosion(player.x, player.y, true);
             saveHiScore();
             state = STATE_OVER;
@@ -1568,9 +1956,19 @@ public class SpaceWarGame extends ApplicationAdapter {
             }
             batch.setColor(1f, 1f, 1f, 1f);
         }
-        for (Enemy e : enemies) e.draw(batch, font, layout, WORLD_H);
-        if (partner != null) partner.draw(batch, font, layout, WORLD_H);
-        player.draw(batch);
+        if (!diMenu()) {
+            for (Enemy e : enemies) e.draw(batch, font, layout, WORLD_H);
+            if (partner != null) partner.draw(batch, font, layout, WORLD_H);
+            // Lingkaran perisai toko di sekeliling pemain selagi aktif
+            if (player.shieldTime > 0f) {
+                float kedip = 0.35f + 0.15f
+                        * (float) Math.abs(Math.sin(player.shieldTime * 6f));
+                batch.setColor(0.45f, 0.90f, 1f, kedip);
+                batch.draw(softDotTex, player.x - 26f, player.y - 26f, 52f, 52f);
+                batch.setColor(1f, 1f, 1f, 1f);
+            }
+            player.draw(batch);
+        }
         for (Particle p : particles) {
             float a = Math.max(0f, p.life / p.maxLife);
             float s = p.size * 2.6f;
@@ -1587,12 +1985,18 @@ public class SpaceWarGame extends ApplicationAdapter {
         float screenW = Gdx.graphics.getWidth();
         float screenH = Gdx.graphics.getHeight();
 
+        if (diMenu()) {
+            gambarMenu(density, screenW, screenH);
+            uiBatch.end();
+            return;
+        }
+
         // Bar darah pemain + angka HP di kiri atas (menggantikan ikon hati)
         float hpBarW = 124f * density;
         float hpBarH = 14f * density;
         float hpBarX = 14f * density;
         float hpBarY = screenH - 14f * density - hpBarH;
-        float fracHp = Math.max(0f, (float) player.hp / (float) Player.MAX_HP);
+        float fracHp = Math.max(0f, (float) player.hp / (float) player.maxHpEfektif());
         uiBatch.setColor(0f, 0f, 0f, 0.55f);
         uiBatch.draw(whiteTex, hpBarX - 2f, hpBarY - 2f, hpBarW + 4f, hpBarH + 4f);
         uiBatch.setColor(0.10f, 0.13f, 0.20f, 0.9f);
@@ -1604,7 +2008,7 @@ public class SpaceWarGame extends ApplicationAdapter {
         uiBatch.setColor(1f, 1f, 1f, 1f);
         font.getData().setScale(0.95f * density);
         font.setColor(1f, 1f, 1f, 1f);
-        String hpText = "HP " + player.hp + "/" + Player.MAX_HP;
+        String hpText = "HP " + player.hp + "/" + player.maxHpEfektif();
         layout.setText(font, hpText);
         font.draw(uiBatch, hpText, hpBarX + 6f * density,
                 hpBarY + hpBarH / 2f + layout.height / 2f);
@@ -1618,6 +2022,12 @@ public class SpaceWarGame extends ApplicationAdapter {
         String hidupText = "TOTAL HIDUP: " + totalHidup;
         font.draw(uiBatch, hidupText, hpBarX,
                 hpBarY - 10f * density);
+
+        // Dompet koin (bertambah dari setiap musuh yang dihancurkan)
+        font.setColor(1f, 0.85f, 0.35f, 1f);
+        String koinText = "KOIN: " + koin;
+        font.draw(uiBatch, koinText, hpBarX,
+                hpBarY - 32f * density);
 
         // Peringatan saat kapal induk muncul (berkedip, tengah atas)
         if (bossWarnTimer > 0f && ((int) (bossWarnTimer * 3f)) % 2 == 0) {
@@ -1697,7 +2107,7 @@ public class SpaceWarGame extends ApplicationAdapter {
                 rocketCenterY - rocketBtnSize / 2f, rocketBtnSize, rocketBtnSize);
         uiBatch.setColor(1f, 1f, 1f, 1f);
         if (rocketCooldown > 0f) {
-            float sisa = rocketCooldown / ROCKET_COOLDOWN;
+            float sisa = rocketCooldown / (ROCKET_COOLDOWN * rocketCooldownFactor);
             float tinggiSapuan = rocketBtnSize * sisa;
             uiBatch.setColor(0f, 0f, 0f, 0.55f);
             uiBatch.draw(rocketBtnTex, rocketCenterX - rocketBtnSize / 2f,
@@ -1779,6 +2189,11 @@ public class SpaceWarGame extends ApplicationAdapter {
             layout.setText(font, finalScore);
             font.draw(uiBatch, finalScore,
                     (screenW - layout.width) / 2f, screenH * 0.62f - 52f * density);
+            font.setColor(1f, 0.85f, 0.35f, 1f);
+            String koinAkhir = "KOIN +" + koinRun + "  (TOTAL " + koin + ")";
+            layout.setText(font, koinAkhir);
+            font.draw(uiBatch, koinAkhir,
+                    (screenW - layout.width) / 2f, screenH * 0.62f - 88f * density);
         }
         uiBatch.end();
     }

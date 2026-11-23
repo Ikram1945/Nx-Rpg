@@ -189,6 +189,8 @@ public class Enemy {
     public final int maxHp;
     public final float radius;
     public final int scoreValue;
+    /** Koin yang didapat pemain bila menghancurkan musuh ini. */
+    public final int coinValue;
     /** Kecepatan gerak maksimum & kecepatan jelajah tanpa sasaran. */
     public final float maxSpeed;
     public final float cruise;
@@ -228,6 +230,7 @@ public class Enemy {
             hp = maxHp = 500;
             radius = 30f;
             scoreValue = 2000;
+            coinValue = 500;
             maxSpeed = 24f;
             cruise = 14f;
             prefRange = 215f;
@@ -237,6 +240,7 @@ public class Enemy {
             hp = maxHp = 50;
             radius = 10.5f;
             scoreValue = 250;
+            coinValue = 25;
             maxSpeed = 46f;
             cruise = 26f;
             prefRange = 145f;
@@ -246,6 +250,7 @@ public class Enemy {
             hp = maxHp = 20;
             radius = 8f;
             scoreValue = 100;
+            coinValue = 10;
             maxSpeed = 82f;
             cruise = 40f;
             prefRange = 95f;

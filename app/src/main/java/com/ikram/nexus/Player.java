@@ -30,8 +30,17 @@ public class Player {
     public float facing;
     /** Pengali kecepatan gerak (diatur game; > 1 saat NOS aktif). */
     public float speedScale = 1f;
+    /** Bonus darah maks dari upgrade pemain (diatur game). */
+    public int hpBonus;
+    /** Pengali kecepatan dari upgrade pemain (diatur game). */
+    public float speedFactor = 1f;
+    /** Sisa waktu perisai awal dari toko (detik); selama > 0 kebal. */
+    public float shieldTime;
     public int hp = MAX_HP;
     public boolean dead;
+
+    /** Darah maksimum efektif: dasar + bonus upgrade. */
+    public int maxHpEfektif() { return MAX_HP + hpBonus; }
     private float invulnTime;
     private float stateTime;
 
@@ -105,14 +114,15 @@ public class Player {
     public void update(float delta, float mx, float my, float viewW, float viewH) {
         stateTime += delta;
         if (invulnTime > 0f) invulnTime -= delta;
+        if (shieldTime > 0f) shieldTime -= delta;
         if (dead) return;
         float len = (float) Math.sqrt(mx * mx + my * my);
         if (len > 0.01f) {
             float nx = mx / len;
             float ny = my / len;
             float mag = Math.min(1f, len);
-            x += nx * SPEED * speedScale * mag * delta;
-            y += ny * SPEED * speedScale * mag * delta;
+            x += nx * SPEED * speedScale * speedFactor * mag * delta;
+            y += ny * SPEED * speedScale * speedFactor * mag * delta;
             // Badan berputar mengikuti arah gerak
             float target = (float) Math.toDegrees(Math.atan2(ny, nx));
             facing = SpriteArt.turnToward(facing, target, TURN_RATE * delta);
@@ -132,7 +142,7 @@ public class Player {
         return y + (float) Math.sin(Math.toRadians(facing)) * 15f;
     }
 
-    public boolean isInvulnerable() { return invulnTime > 0f; }
+    public boolean isInvulnerable() { return invulnTime > 0f || shieldTime > 0f; }
 
     /**
      * Kena serangan sebesar amount (angka tetap dari tabel kerusakan di
@@ -153,11 +163,21 @@ public class Player {
     public void respawn(float rx, float ry) {
         x = rx;
         y = ry;
-        hp = MAX_HP;
+        hp = maxHpEfektif();
         dead = false;
         invulnTime = 2f;
         facing = 0f;
     }
+
+    /** Hidup lagi di tempat (Nyawa Cadangan dari toko): setengah darah + kebal sesaat. */
+    public void revive() {
+        dead = false;
+        hp = maxHpEfektif() / 2;
+        invulnTime = 2.5f;
+    }
+
+    /** Bingkai sprite untuk gambar besar di menu utama. */
+    public TextureRegion teksturMenu() { return frames[0]; }
 
     public void draw(SpriteBatch batch) {
         if (dead) return;

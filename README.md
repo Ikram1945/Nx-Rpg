@@ -7,6 +7,29 @@ Proyek ini awalnya bernama Nx Rpg (dulu RPG desa top-down); pada
 nama menjadi **Space War**. Berkas peta desa lama tidak lagi dipakai,
 tapi masih tersimpan di `assets/`.
 
+## Menu utama, koin, toko & upgrade
+
+Game **tidak lagi langsung bermain** saat dibuka — yang tampil
+lebih dulu adalah **menu utama**: judul SPACE WAR, gambar besar
+pesawat pemain, saldo **koin**, dan tombol **MULAI PERMAINAN**,
+**TOKO**, **UPGRADE PLAYER**, **UPGRADE PARTNER**. Game over pun
+sekarang kembali ke menu utama (tidak lagi mulai sendiri).
+
+- **Koin** didapat dari setiap musuh yang kamu hancurkan: drone
+  **10**, gunner **25**, kapal induk **500**. Saldo koin tampil di
+  menu dan di HUD selama bermain (di bawah TOTAL HIDUP), dan
+  tersimpan permanen bersama level upgrade & stok barang.
+- **Upgrade Player** (permanen, maks Lv.5, harga naik tiap level):
+  Badan Kuat (darah maks +50), Pemicu Cepat (tembakan 12% lebih
+  cepat), Mesin Kencang (terbang 8% lebih cepat).
+- **Upgrade Partner** (permanen, maks Lv.5): Badan Partner (darah
+  +25), Senjata Partner (damage peluru +5), Pemicu Partner
+  (tembakan 12% lebih cepat).
+- **Toko** (barang sekali pakai, dipakai otomatis di awal
+  permainan berikutnya): Perisai Awal 150 (kebal 8 detik),
+  Nyawa Cadangan 300 (hidup lagi sekali dengan setengah darah),
+  Booster Roket 100 (jeda roket separuh).
+
 ## Cara bermain
 
 - Arena pertempuran adalah **peta besar 1280x720** (16x luas layar) —

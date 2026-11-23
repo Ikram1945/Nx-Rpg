@@ -40,8 +40,13 @@ public class Partner {
     public float x, y;
     /** Arah hadap pesawat dalam derajat (0 = kanan, CCW). */
     public float facing;
+    /** Bonus darah maks dari upgrade partner (diatur game). */
+    public int hpBonus;
     public int hp = MAX_HP;
     public boolean dead;
+
+    /** Darah maksimum efektif: dasar + bonus upgrade. */
+    public int maxHpEfektif() { return MAX_HP + hpBonus; }
     private float invulnTime;
     private float stateTime;
     private float flashTime;
@@ -146,7 +151,7 @@ public class Partner {
     public void respawn(float rx, float ry) {
         x = rx;
         y = ry;
-        hp = MAX_HP;
+        hp = maxHpEfektif();
         dead = false;
         invulnTime = 2f;
         facing = 0f;
@@ -192,12 +197,12 @@ public class Partner {
         batch.draw(frame, x - 15f, y - 7.5f, 15f, 7.5f, 30f, 15f, 1f, 1f, facing);
         batch.setColor(1f, 1f, 1f, 1f);
         // Bar darah + angka HP di atas pesawat, sama seperti musuh
-        if (hp < MAX_HP && hp > 0) {
+        if (hp < maxHpEfektif() && hp > 0) {
             boolean diBawah = y > worldH - 22f;
             float barW = RADIUS * 2f;
             float barX = x - barW / 2f;
             float barY = diBawah ? y - RADIUS - 13f : y + RADIUS + 9.5f;
-            float frac = (float) hp / (float) MAX_HP;
+            float frac = (float) hp / (float) maxHpEfektif();
             batch.setColor(0f, 0f, 0f, 0.55f);
             batch.draw(whiteTex, barX - 0.6f, barY - 0.6f, barW + 1.2f, 3.6f);
             batch.setColor(Math.min(1f, 1.7f * (1f - frac)), Math.min(1f, 1.7f * frac), 0.15f, 0.95f);
