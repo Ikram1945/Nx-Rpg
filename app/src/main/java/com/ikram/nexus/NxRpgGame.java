@@ -14,6 +14,8 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Locale;
@@ -67,6 +69,10 @@ public class NxRpgGame extends ApplicationAdapter {
     private float fireTimer;
     private float hitFlash;
 
+    // Penampil error: bila terisi, game berhenti & layar error yang digambar
+    private String errorText;
+    private final ArrayList<String> errorLines = new ArrayList<>();
+
     // Joystick tetap (piksel layar, y ke atas)
     private boolean joyActive = false;
     private int joyPointer = -1;
@@ -105,17 +111,33 @@ public class NxRpgGame extends ApplicationAdapter {
 
     @Override
     public void create() {
-        camera = new OrthographicCamera();
-        viewport = new ExtendViewport(VIEW_W, VIEW_H, camera);
-        batch = new SpriteBatch();
+        // Perlengkapan layar error dibuat paling dulu & terpisah, supaya
+        // error apa pun sesudah ini tetap bisa DITAMPILKAN di layar game
+        // (bukan force close diam-diam). Bila bahkan ini gagal, penangkap
+        // error di MainActivity yang mengambil alih.
         screenCam = new OrthographicCamera();
         uiBatch = new SpriteBatch();
         font = new BitmapFont();
+        try {
+            whiteTex = makeWhiteTexture();
+        } catch (Throwable abaikan) {
+            whiteTex = null;
+        }
+        try {
+            createGame();
+        } catch (Throwable t) {
+            showError(t);
+        }
+    }
+
+    private void createGame() {
+        camera = new OrthographicCamera();
+        viewport = new ExtendViewport(VIEW_W, VIEW_H, camera);
+        batch = new SpriteBatch();
 
         joyBaseTex = new Texture(Gdx.files.internal("ui/joy_base.png"));
         joyKnobTex = new Texture(Gdx.files.internal("ui/joy_knob.png"));
         fireBtnTex = makeFireButtonTexture();
-        whiteTex = makeWhiteTexture();
         softDotTex = makeSoftDotTexture();
         heartFullTex = makeHeartTexture(true);
         heartEmptyTex = makeHeartTexture(false);
@@ -251,6 +273,12 @@ public class NxRpgGame extends ApplicationAdapter {
 
     @Override
     public void resize(int width, int height) {
+        if (viewport == null) {
+            // createGame gagal sebelum viewport jadi: cukup siapkan kamera
+            // layar error, sisanya ditangani penampil error.
+            screenCam.setToOrtho(false, width, height);
+            return;
+        }
         viewport.update(width, height, true);
         screenCam.setToOrtho(false, width, height);
         layoutJoystick();
@@ -484,6 +512,19 @@ public class NxRpgGame extends ApplicationAdapter {
 
     @Override
     public void render() {
+        if (errorText != null) {
+            drawErrorScreen();
+            return;
+        }
+        try {
+            renderGame();
+        } catch (Throwable t) {
+            showError(t);
+            drawErrorScreen();
+        }
+    }
+
+    private void renderGame() {
         float delta = Math.min(Gdx.graphics.getDeltaTime(), 1f / 30f);
         float viewW = viewport.getWorldWidth();
         float viewH = viewport.getWorldHeight();
@@ -776,20 +817,95 @@ public class NxRpgGame extends ApplicationAdapter {
         uiBatch.end();
     }
 
+    // ---------- Penampil error di dalam game ----------
+
+    /**
+     * Tangkap error: simpan jejak lengkapnya, catat ke log, dan siapkan
+     * baris-barisnya untuk digambar oleh drawErrorScreen(). Game berhenti
+     * berjalan, tapi aplikasi TIDAK mati — errornya tampil di layar
+     * supaya bisa dibaca / difoto / dikirim ke pengembang.
+     */
+    private void showError(Throwable t) {
+        StringWriter sw = new StringWriter();
+        t.printStackTrace(new PrintWriter(sw));
+        errorText = sw.toString();
+        try {
+            Gdx.app.error("NxSpace", "Error tertangkap:\n" + errorText);
+        } catch (Throwable abaikan) {
+            // Log bisa gagal bila app belum siap; abaikan
+        }
+        try {
+            Gdx.files.local("nx-space-error.txt").writeString(errorText, false);
+        } catch (Throwable abaikan) {
+            // Penyimpanan cadangan gagal pun tak boleh mematikan game
+        }
+        // Bungkus baris panjang agar muat selebar layar
+        errorLines.clear();
+        int perBaris = Math.max(40, (Gdx.graphics.getWidth() - 32) / 8);
+        for (String mentah : errorText.split("\n")) {
+            String baris = mentah.replace("\t", "    ").replace("\r", "");
+            while (baris.length() > perBaris) {
+                errorLines.add(baris.substring(0, perBaris));
+                baris = "  " + baris.substring(perBaris);
+            }
+            errorLines.add(baris);
+        }
+    }
+
+    private void drawErrorScreen() {
+        if (uiBatch == null || font == null || screenCam == null) {
+            // Tak ada alat gambar: biarkan penangkap di MainActivity bekerja
+            return;
+        }
+        float w = Gdx.graphics.getWidth();
+        float h = Gdx.graphics.getHeight();
+        screenCam.setToOrtho(false, w, h);
+        screenCam.update();
+        Gdx.gl.glClearColor(0.10f, 0.02f, 0.03f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        uiBatch.setProjectionMatrix(screenCam.combined);
+        uiBatch.begin();
+        if (whiteTex != null) {
+            uiBatch.setColor(0.50f, 0.09f, 0.11f, 1f);
+            uiBatch.draw(whiteTex, 0, h - 52, w, 52);
+            uiBatch.setColor(1f, 1f, 1f, 1f);
+        }
+        font.getData().setScale(1.5f);
+        font.setColor(1f, 0.92f, 0.92f, 1f);
+        font.draw(uiBatch, "TERJADI ERROR", 16, h - 16);
+        font.getData().setScale(0.9f);
+        font.setColor(1f, 0.78f, 0.78f, 1f);
+        float y = h - 76;
+        int maxLines = (int) ((h - 110) / 15f);
+        for (int i = 0; i < errorLines.size() && i < maxLines; i++) {
+            font.draw(uiBatch, errorLines.get(i), 16, y);
+            y -= 15f;
+        }
+        font.getData().setScale(1f);
+        font.setColor(1f, 0.85f, 0.45f, 1f);
+        font.draw(uiBatch, "Foto layar ini, lalu kirim ke pengembang.", 16, 26);
+        font.setColor(1f, 1f, 1f, 1f);
+        uiBatch.end();
+    }
+
     @Override
     public void dispose() {
-        saveHiScore();
-        batch.dispose();
-        uiBatch.dispose();
-        font.dispose();
-        joyBaseTex.dispose();
-        joyKnobTex.dispose();
-        fireBtnTex.dispose();
-        whiteTex.dispose();
-        softDotTex.dispose();
-        heartFullTex.dispose();
-        heartEmptyTex.dispose();
-        player.dispose();
+        try {
+            saveHiScore();
+        } catch (Throwable abaikan) {
+            // Dispose tidak boleh melempar error baru
+        }
+        if (batch != null) batch.dispose();
+        if (uiBatch != null) uiBatch.dispose();
+        if (font != null) font.dispose();
+        if (joyBaseTex != null) joyBaseTex.dispose();
+        if (joyKnobTex != null) joyKnobTex.dispose();
+        if (fireBtnTex != null) fireBtnTex.dispose();
+        if (whiteTex != null) whiteTex.dispose();
+        if (softDotTex != null) softDotTex.dispose();
+        if (heartFullTex != null) heartFullTex.dispose();
+        if (heartEmptyTex != null) heartEmptyTex.dispose();
+        if (player != null) player.dispose();
         Enemy.disposeShared();
     }
 }

@@ -30,6 +30,15 @@ tapi masih tersimpan di `assets/`).
 - **Tombol tembak** di kanan bawah: tahan untuk menembak terus.
 - Di desktop: WASD / tombol panah untuk bergerak, SPASI untuk menembak.
 
+## Penampil error (anti force close diam-diam)
+
+- Error di dalam game (create/render) ditangkap dan **ditampilkan di
+  layar game** sebagai teks merah berisi jejak error lengkap — game
+  berhenti, tapi aplikasi tidak mati. Foto layar itu untuk diagnosis.
+- Error fatal di luar game ditangkap `MainActivity`, disimpan ke
+  berkas, lalu ditampilkan `ErrorActivity` (bisa disalin; tombol
+  "Hapus & Coba Lagi" untuk mencoba main lagi).
+
 ## Catatan teknis
 
 - Semua sprite (pesawat, drone, gunner, hati) digambar **prosedural dari
