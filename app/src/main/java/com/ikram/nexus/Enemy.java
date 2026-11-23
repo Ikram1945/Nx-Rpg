@@ -388,7 +388,10 @@ public class Enemy {
         if (x < -30f || x > worldW + 30f || y < -30f || y > worldH + 30f) return true;
         float dx = x - playerX;
         float dy = y - playerY;
-        return dx * dx + dy * dy > 320f * 320f;
+        // Ambang jauh dibuat longgar (560) agar gerombolan musuh yang
+        // bertarung agak jauh dari pemain tidak lenyap begitu saja —
+        // jumlah musuh hidup harus bisa mencapai puluhan.
+        return dx * dx + dy * dy > 560f * 560f;
     }
 
     public void draw(SpriteBatch batch, BitmapFont font, GlyphLayout layout, float worldH) {

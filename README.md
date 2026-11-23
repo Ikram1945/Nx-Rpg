@@ -80,7 +80,10 @@ sekarang kembali ke menu utama (tidak lagi mulai sendiri).
 - Gelombang makin rapat seiring waktu. Komposisi musuh tetap:
   alien **ungu (drone) 55%**, alien **kuning (gunner) 30%**, alien
   **hijau (roket) 15%**, dan bot
-  yang hidup bersamaan **dibatasi 8**. Di bawah bar HP ada tulisan
+  yang hidup bersamaan **dibatasi 30** — puluhan musuh di arena
+  sekaligus. Mereka datang bergerombol (3-5 per kedatangan, makin
+  sering seiring waktu) dan 14 langsung menyambut di awal
+  permainan, jadi arena ramai sejak detik pertama. Di bawah bar HP ada tulisan
   **"TOTAL HIDUP: N"** — jumlah semua yang masih hidup, termasuk
   pesawatmu. Font HUD dihaluskan (filter Linear) supaya tidak lagi
   tampil berpiksel.

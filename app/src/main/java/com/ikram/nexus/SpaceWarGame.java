@@ -64,7 +64,7 @@ public class SpaceWarGame extends ApplicationAdapter {
     private static final float MINI_ROCKET_RANGE = 280f;
     private static final int MINI_ROCKET_MAX_PER = 2;
     // Bot musuh yang hidup bersamaan dibatasi segini
-    private static final int MAX_BOT_HIDUP = 8;
+    private static final int MAX_BOT_HIDUP = 30;
     // Kapal induk (boss): hanya SATU dalam setiap permainan, muncul
     // sekali setelah permainan berjalan BOSS_SPAWN_TIME detik
     private static final float BOSS_SPAWN_TIME = 45f;
@@ -1159,7 +1159,7 @@ public class SpaceWarGame extends ApplicationAdapter {
         score = 0;
         koinRun = 0;
         elapsed = 0f;
-        spawnTimer = 0.8f;
+        spawnTimer = 0.3f;
         fireTimer = 0f;
         nosTime = 0f;
         nosCooldown = 0f;
@@ -1190,6 +1190,10 @@ public class SpaceWarGame extends ApplicationAdapter {
             dompetBerubah = true;
         }
         if (dompetBerubah) simpanDompet();
+        // Gelombang pembuka: arena langsung ramai sejak detik pertama
+        for (int i = 0; i < 14; i++) {
+            spawnEnemy(viewW, viewH);
+        }
         camInit = false; // kamera langsung melompat ke pemain
         state = STATE_PLAY;
     }
@@ -1625,15 +1629,25 @@ public class SpaceWarGame extends ApplicationAdapter {
                 rocketCooldown = ROCKET_COOLDOWN * rocketCooldownFactor;
             }
 
-            // Gelombang musuh (maksimal 7 bot hidup bersamaan)
+            // Gelombang musuh: puluhan bot hidup bersamaan (maks 30).
+            // Musuh datang BERGEROMBOL — rombongan membesar seiring
+            // waktu (3 -> 4 -> 5 per kedatangan) dan jedanya makin
+            // singkat. Laju kedatangan sengaja jauh di atas laju
+            // gugurnya musuh (mereka juga saling membasmi), jadi
+            // jumlah yang hidup menempel di batas puluhan.
             spawnTimer -= delta;
             if (spawnTimer <= 0f) {
                 if (enemies.size() < MAX_BOT_HIDUP) {
-                    spawnEnemy(viewW, viewH);
-                    float interval = Math.max(0.42f, 1.05f - elapsed * 0.008f);
+                    int rombongan = 3 + (elapsed >= 25f ? 1 : 0)
+                            + (elapsed >= 60f ? 1 : 0);
+                    for (int i = 0; i < rombongan
+                            && enemies.size() < MAX_BOT_HIDUP; i++) {
+                        spawnEnemy(viewW, viewH);
+                    }
+                    float interval = Math.max(0.14f, 0.5f - elapsed * 0.004f);
                     spawnTimer = interval * (0.7f + (float) Math.random() * 0.6f);
                 } else {
-                    spawnTimer = 0.35f;
+                    spawnTimer = 0.3f;
                 }
             }
 
