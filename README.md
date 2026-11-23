@@ -1,54 +1,35 @@
-# Nx RPG
+# Nx Space (sebelumnya Nx RPG)
 
-Game RPG top-down 2D berbasis **libGDX 1.14.2**, dibangun sebagai proyek
-ApkBuild/CodeAssist satu modul (paket `com.ikram.nexus`).
+Game **pertempuran luar angkasa** 2D berbasis **libGDX 1.14.2**, dibangun
+sebagai proyek ApkBuild/CodeAssist satu modul (paket `com.ikram.nexus`).
+Proyek ini awalnya RPG desa top-down; pada 2026-11-23 dirombak total
+menjadi penembak luar angkasa (berkas peta desa lama tidak lagi dipakai,
+tapi masih tersimpan di `assets/`).
 
-## Tahap awal — yang sudah ada
+## Cara bermain
 
-- Peta desa 40×30 tile (`app/src/main/assets/maps/village.tmx`, format Tiled):
-  jalan tanah bersilang, 3 rumah, kandang berpagar, pohon, jamur, papan nama.
-- Karakter pemain: kesatria berpedang 16×20 dengan animasi jalan 4 arah
-  (bawah/kiri/atas/kanan).
-- Kamera mengikuti pemain dan terjepit di tepi peta.
-- Tabrakan (collision) dari layer `collision` di peta: rumah, pohon, pagar,
-  dan air tidak bisa ditembus; pemain meluncur di sepanjang dinding.
-- Musuh: 3 slime berkeliaran di desa (digambar dari kode juga). Slime
-  mendeteksi pemain dalam radius 72 piksel, mengejar (kecepatan 40,
-  pemain 72 — masih bisa kabur), dan menyerang tiap ±1 detik saat dekat:
-  pemain kehilangan 1 hati, terpental, dan kebal 1 detik. Pedang pemain
-  membunuh slime dalam 3 ayunan; slime muncul lagi di titik asalnya
-  setelah 6 detik. Darah pemain 5 hati (HUD di kiri atas); kalau habis,
-  pemain bangun lagi di persimpangan dengan darah penuh.
-- Kendali:
-  - **Sentuh**: joystick tetap di kiri bawah layar — sentuh di separuh kiri
-    layar lalu geser, knob mengikuti arah geser.
-  - **Serang**: tombol pedang di kanan bawah layar — kesatria mengayunkan
-    pedang ke arah hadapnya (dengan bayangan ayunan).
-  - **Keyboard**: WASD atau tombol panah untuk bergerak, spasi untuk menyerang.
+- Pesawatmu di sisi kiri layar; alien datang dari kanan tanpa henti.
+- **Drone** (ungu): cepat, hancur 1 tembakan, 100 poin.
+- **Gunner** (merah): lambat, 3 darah, menembak ke arahmu, 250 poin.
+- Darahmu 3 hati. Kena peluru/tabrakan = -1 hati + kebal sesaat (berkedip).
+  Hati habis = game over, lalu mulai lagi sendiri dengan skor tertinggi
+  tersimpan.
+- Gelombang makin rapat seiring waktu; gunner mulai muncul setelah
+  ±18 detik.
 
-## Struktur kode
+## Kendali
 
-| Berkas | Isi |
-| --- | --- |
-| `app/src/main/java/com/ikram/nexus/MainActivity.java` | Launcher Android libGDX |
-| `app/src/main/java/com/ikram/nexus/NxRpgGame.java` | Game utama: peta, kamera, input, joystick |
-| `app/src/main/java/com/ikram/nexus/Player.java` | Pemain: animasi, gerak, tabrakan |
+- **Joystick** tetap di kiri bawah (sentuh + geser) untuk bergerak bebas.
+- **Tombol tembak** di kanan bawah: tahan untuk menembak terus.
+- Di desktop: WASD / tombol panah untuk bergerak, SPASI untuk menembak.
 
-Aset ada di `app/src/main/assets/` (`maps/`, `tilesets/`, `sprites/`).
+## Catatan teknis
 
-## Kredit aset
-
-- Tileset **“Tiny Town”** oleh Kenney (kenney.nl) — lisensi **CC0**
-  (bebas pakai, tanpa atribusi wajib). Lisensi lengkap di
-  `app/src/main/assets/tilesets/kenney-license.txt`.
-- Sprite kesatria di `app/src/main/assets/sprites/player.png` dan grafis
-  joystick di `app/src/main/assets/ui/` digambar khusus untuk proyek ini
-  (peta piksel dari kode), bebas dipakai tanpa atribusi.
-
-## Rencana tahap berikutnya
-
-- NPC desa + dialog
-- Pintu rumah bisa dimasuki (peta interior)
-- Musuh + sistem bertarung sederhana
-- Musik latar + efek suara
-- Urutan gambar berdasarkan sumbu Y (pemain bisa lewat di belakang pohon)
+- Semua sprite (pesawat, drone, gunner, hati) digambar **prosedural dari
+  peta piksel** di dalam kode (Pixmap -> Texture) — tanpa berkas gambar,
+  karena rantai build di HP terbukti merusak tekstur PNG karakter.
+- Latar bintang paralaks 3 lapis; ledakan partikel; kilat merah saat kena.
+- Tiga berkas sumber utama: `NxRpgGame.java` (lingkup game + HUD),
+  `Player.java` (pesawat pemain), `Enemy.java` (alien).
+- Aset yang masih dipakai: tekstur joystick `assets/ui/joy_base.png` dan
+  `assets/ui/joy_knob.png`.

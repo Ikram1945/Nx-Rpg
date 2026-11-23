@@ -3,45 +3,24 @@ package com.ikram.nexus;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 
 /**
- * Karakter pemain: kesatria berpedang 16x20.
- * Sprite DIGAMBAR DARI KODE: peta piksel di bawah diubah menjadi
- * Pixmap lalu Texture saat game mulai — tanpa berkas gambar sama
- * sekali, jadi tampilannya tidak tergantung dekode PNG di HP.
- * Tiap frame ditaruh di tengah-bawah kanvas 32x32 (pangkat dua).
- * Urutan arah: 0=bawah, 1=kiri, 2=atas, 3=kanan.
- * Frame per arah: 0=langkah A, 1=diam/tengah, 2=langkah B.
- * Posisi (x, y) = titik tengah-bawah sprite (jejak kaki).
+ * Pesawat pemain (game pertempuran luar angkasa).
+ * Digambar prosedural dari peta piksel (Pixmap -> Texture) — tanpa berkas
+ * gambar, cara yang sama yang terbukti aman di rantai build HP.
+ * Posisi x/y adalah titik TENGAH pesawat.
  */
 public class Player {
-    public static final int DOWN = 0, LEFT = 1, UP = 2, RIGHT = 3;
-    private static final int FRAME_W = 16, FRAME_H = 20;
-    private static final float SPEED = 72f;    // piksel dunia per detik
-    private static final float HALF_W = 5f;    // setengah lebar kotak tabrakan
-    private static final float BOX_H = 8f;     // tinggi kotak tabrakan (area kaki)
 
-    // Peta piksel kesatria: [arah][frame] = 20 baris x 16 karakter.
-    // '.' = transparan; huruf lain = warna (lihat colorOf).
-    private static final String[][][] PIXELS = {
-        // bawah
-        { { "......RRR.......", ".....RRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", "....SSSSSSSS....", "....SKKKKKKS....", "....SSSSSSSS....", ".....SSSSSS.....", "...SSSSSSSSSS...", "..SSSSSSSSSSSS..", "..sSSSSSSSSSSs..", "..sSSGGGGGGSSs..", ".HHsSSBBBBSSs...", ".WG.sSBBBBSS....", ".WG..BBBBBB.....", ".WG..BBBBBB.....", "....BB....BB....", "....BB.....BB...", "....EE......EE..", "...EEE.......EE." }, { "......RRR.......", ".....RRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", "....SSSSSSSS....", "....SKKKKKKS....", "....SSSSSSSS....", ".....SSSSSS.....", "...SSSSSSSSSS...", "..SSSSSSSSSSSS..", "..sSSSSSSSSSSs..", "..sSSGGGGGGSSs..", ".HHsSSBBBBSSs...", ".WG.sSBBBBSS....", ".WG..BBBBBB.....", ".WG..BBBBBB.....", ".....BB..BB.....", ".....BB..BB.....", ".....EE..EE.....", "....EEE..EEE...." }, { "......RRR.......", ".....RRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", "....SSSSSSSS....", "....SKKKKKKS....", "....SSSSSSSS....", ".....SSSSSS.....", "...SSSSSSSSSS...", "..SSSSSSSSSSSS..", "..sSSSSSSSSSSs..", "..sSSGGGGGGSSs..", ".HHsSSBBBBSSs...", ".WG.sSBBBBSS....", ".WG..BBBBBB.....", ".WG..BBBBBB.....", "....BB....BB....", "...BB......BB...", "..EE........EE..", ".EE..........EEE" } },
-        // kiri
-        { { ".......RRRR.....", "......RRRRRR....", ".....SSSSSS.....", "....SSSSSSSS....", "...SSSSSSSS.....", "..KSSSSSSS......", "..KSSSSSSS......", "....SSSSSS......", "...SSSSSSSS.....", "...SSSSSSSSS....", "...SSSSSSS......", "...SGGGGGG......", ".HHSSBBBB.......", ".WG.SBBBB.......", ".WG..BBBB.......", ".WG..BBBB.......", ".W..BB....BB....", ".W..BB.....BB...", "....EE.......EE.", "...EEE.......EEE" }, { ".......RRRR.....", "......RRRRRR....", ".....SSSSSS.....", "....SSSSSSSS....", "...SSSSSSSS.....", "..KSSSSSSS......", "..KSSSSSSS......", "....SSSSSS......", "...SSSSSSSS.....", "...SSSSSSSSS....", "...SSSSSSS......", "...SGGGGGG......", ".HHSSBBBB.......", ".WG.SBBBB.......", ".WG..BBBB.......", ".WG..BBBB.......", ".W...BB.BB......", ".W...BB.BB......", ".....EE.EE......", "....EEE.EEE....." }, { ".......RRRR.....", "......RRRRRR....", ".....SSSSSS.....", "....SSSSSSSS....", "...SSSSSSSS.....", "..KSSSSSSS......", "..KSSSSSSS......", "....SSSSSS......", "...SSSSSSSS.....", "...SSSSSSSSS....", "...SSSSSSS......", "...SGGGGGG......", ".HHSSBBBB.......", ".WG.SBBBB.......", ".WG..BBBB.......", ".WG..BBBB.......", ".W...BB.BB......", ".W....BBBB......", "...EE....EE.....", "..EEE.....EEE..." } },
-        // atas
-        { { "......RRR.......", ".....RRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", "....SSSdSSSS....", "....SSSdSSSS....", "....SSSSSSSS....", ".....SSSSSS.....", "...SSSSSSSSSS...", "..SSSSSSSSSSSS..", "..sSBBBBBBBBSs..", "..sSBBBBBBBBSs..", ".HHsBBBBBBBBs...", ".WG.BBBBBBBB....", ".WG.BBBBBBBB....", ".WG.BBBBBBBB....", "....BB....BB....", "....BB.....BB...", "....EE......EE..", "...EEE.......EE." }, { "......RRR.......", ".....RRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", "....SSSdSSSS....", "....SSSdSSSS....", "....SSSSSSSS....", ".....SSSSSS.....", "...SSSSSSSSSS...", "..SSSSSSSSSSSS..", "..sSBBBBBBBBSs..", "..sSBBBBBBBBSs..", ".HHsBBBBBBBBs...", ".WG.BBBBBBBB....", ".WG.BBBBBBBB....", ".WG.BBBBBBBB....", ".....BB..BB.....", ".....BB..BB.....", ".....EE..EE.....", "....EEE..EEE...." }, { "......RRR.......", ".....RRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", "....SSSdSSSS....", "....SSSdSSSS....", "....SSSSSSSS....", ".....SSSSSS.....", "...SSSSSSSSSS...", "..SSSSSSSSSSSS..", "..sSBBBBBBBBSs..", "..sSBBBBBBBBSs..", ".HHsBBBBBBBBs...", ".WG.BBBBBBBB....", ".WG.BBBBBBBB....", ".WG.BBBBBBBB....", "....BB....BB....", "...BB......BB...", "..EE........EE..", ".EE..........EEE" } },
-        // kanan
-        { { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "....BB....BB..W.", "...BB.....BB..W.", ".EE.......EE....", "EEE.......EEE..." }, { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "......BB.BB...W.", "......BB.BB...W.", "......EE.EE.....", ".....EEE.EEE...." }, { ".....RRRR.......", "....RRRRRR......", ".....SSSSSS.....", "....SSSSSSSS....", ".....SSSSSSSS...", "......SSSSSSSK..", "......SSSSSSSK..", "......SSSSSS....", ".....SSSSSSSS...", "....SSSSSSSSS...", "......SSSSSSS...", "......GGGGGGS...", ".......BBBBSSHH.", ".......BBBBS.GW.", ".......BBBB..GW.", ".......BBBB..GW.", "......BB.BB...W.", "......BBBB....W.", ".....EE....EE...", "...EEE.....EEE.." } }
-    };
+    public static final int MAX_HP = 3;
+    public static final float SPEED = 118f;
+    public static final float RADIUS = 7f;
 
-    // Pose serang per arah: kanvas 32x32 penuh (badan + pedang menyatu),
-    // urutan [bawah, kiri, atas, kanan], 32 baris x 32 karakter per arah.
-    private static final String[][] ATTACK_PIXELS = {
-        {  // down
+    // Peta piksel pesawat 32x32, 2 bingkai (api mesin pendek / panjang).
+    private static final String[][] PIXELS = {
+        {  // pesawat
                 "................................",
                 "................................",
                 "................................",
@@ -51,31 +30,31 @@ public class Player {
                 "................................",
                 "................................",
                 "................................",
+                "..........K.....................",
+                ".....KKKKKwK....................",
+                "......wwwwwwK...................",
+                ".......wwwwwK...................",
+                ".......wwwKKWKKKKKKKKKKKK.......",
+                "....O...KKWWWWWWWKKWCCKKKKK.....",
+                "...OY.KWWWWWWWWWWKCCCCCKWWKYK...",
+                "..OYYWWWWWWWWWWWWKKCCCKKWWWYYYY.",
+                "...OY.KWWWWWWWWWWWWKKKWWWWKYK...",
+                "....O...KwwwwwwwwwwwwwWWKKK.....",
+                ".......wwwKKWKKKKKKKKKKKK.......",
+                ".......wwwwwK...................",
+                "......wwwwwwK...................",
+                ".....KKKKKwK....................",
                 "................................",
                 "................................",
                 "................................",
-                "..............RRR...............",
-                ".............RRRRR..............",
-                ".............SSSSSS.............",
-                "............SSSSSSSS............",
-                "............SSSSSSSS............",
-                "............SKKKKKKS............",
-                "............SSSSSSSS............",
-                ".............SSSSSS.............",
-                "...........SSSSSSSSSS...........",
-                "..........SSSSSSSSSSSS..........",
-                "..........sSSSSSSSSSSs..........",
-                "..........HGWWWWWWWWWWW.........",
-                ".........HHGwwwwwwwwww..........",
-                "............sSBBBBSS............",
-                ".............BBBBBB.............",
-                ".............BBBBBB.............",
-                ".............BB..BB.............",
-                ".............BB..BB.............",
-                ".............EE..EE.............",
-                "............EEE..EEE............"
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "................................"
         },
-        {  // left
+        {  // pesawat
                 "................................",
                 "................................",
                 "................................",
@@ -85,31 +64,20 @@ public class Player {
                 "................................",
                 "................................",
                 "................................",
-                "................................",
-                "................................",
-                "................................",
-                "...............RRRR.............",
-                "..............RRRRRR............",
-                ".............SSSSSS.............",
-                "............SSSSSSSS............",
-                "...........SSSSSSSS.............",
-                "..........KSSSSSSS..............",
-                "..........KSSSSSSS..............",
-                "............SSSSSS..............",
-                "...........SSSSSSSS.............",
-                "...........SSSSSSSSS............",
-                "...........SSSSSSS..............",
-                "WWWWWWWWG..SGGGGGG..............",
-                "..wwwwwwGHHSSBBBB...............",
-                "............SBBBB...............",
-                ".............BBBB...............",
-                ".............BBBB...............",
-                ".............BB.BB..............",
-                ".............BB.BB..............",
-                ".............EE.EE..............",
-                "............EEE.EEE............."
-        },
-        {  // up
+                "..........K.....................",
+                ".....KKKKKwK....................",
+                "......wwwwwwK...................",
+                ".......wwwwwK...................",
+                ".......wwwKKWKKKKKKKKKKKK.......",
+                "........KKWWWWWWWKKWCCKKKKK.....",
+                "....Y.KWWWWWWWWWWKCCCCCKWWKYK...",
+                ".OYYYWWWWWWWWWWWWKKCCCKKWWWYYYY.",
+                "....Y.KWWWWWWWWWWWWKKKWWWWKYK...",
+                "........KwwwwwwwwwwwwwWWKKK.....",
+                ".......wwwKKWKKKKKKKKKKKK.......",
+                ".......wwwwwK...................",
+                "......wwwwwwK...................",
+                ".....KKKKKwK....................",
                 "................................",
                 "................................",
                 "................................",
@@ -118,134 +86,24 @@ public class Player {
                 "................................",
                 "................................",
                 "................................",
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                "..............RRR...............",
-                ".............RRRRR..............",
-                ".............SSSSSS.............",
-                "............SSSSSSWS............",
-                "............SSSdSWwS............",
-                "............SSSdWwSS............",
-                "............SSSWwSSS............",
-                ".............SWwSSS.............",
-                "...........SSWwSSSSSS...........",
-                "..........SSWwSSSSSSSS..........",
-                "..........sWwBBBBBBBSs..........",
-                "..........GwBBBBBBBBSs..........",
-                ".........HGsBBBBBBBBs...........",
-                "............BBBBBBBB............",
-                "............BBBBBBBB............",
-                "............BBBBBBBB............",
-                ".............BB..BB.............",
-                ".............BB..BB.............",
-                ".............EE..EE.............",
-                "............EEE..EEE............"
-        },
-        {  // right
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                "................................",
-                ".............RRRR...............",
-                "............RRRRRR..............",
-                ".............SSSSSS.............",
-                "............SSSSSSSS............",
-                ".............SSSSSSSS...........",
-                "..............SSSSSSSK..........",
-                "..............SSSSSSSK..........",
-                "..............SSSSSS............",
-                ".............SSSSSSSS...........",
-                "............SSSSSSSSS...........",
-                "..............SSSSSSS...........",
-                "..............GGGGGGS..GWWWWWWWW",
-                "...............BBBBSSHHGwwwwww..",
-                "...............BBBBS............",
-                "...............BBBB.............",
-                "...............BBBB.............",
-                "..............BB.BB.............",
-                "..............BB.BB.............",
-                "..............EE.EE.............",
-                ".............EEE.EEE............"
+                "................................"
         }
     };
-    private static final float ATTACK_DUR = 0.22f;  // lama ayunan pedang (detik)
 
-    private final Texture[][] textures = new Texture[4][3];
-    private final Animation<TextureRegion>[] walk;
-    private final TextureRegion[] idle = new TextureRegion[4];
-    private final Texture[] attackTextures = new Texture[4];
-    private final TextureRegion[] attackRegions = new TextureRegion[4];
-    private final Texture arcTex;
-    private final TextureRegion arcRegion;
-    private final TiledMapTileLayer collision;
-    private final float mapPixelW, mapPixelH;
-
-    public static final int MAX_HP = 5;
+    private final Texture[] textures = new Texture[2];
+    private final TextureRegion[] frames = new TextureRegion[2];
 
     public float x, y;
-    public int facing = DOWN;
     public int hp = MAX_HP;
     public boolean dead;
+    private float invulnTime;
     private float stateTime;
-    private boolean moving;
-    private float attackTime;
-    private float invulnTime;   // kebal sesaat setelah kena serangan
-    private float kbx, kby;     // kecepatan terpental
 
-    @SuppressWarnings("unchecked")
-    public Player(TiledMapTileLayer collisionLayer, float startX, float startY,
-                  float mapPixelW, float mapPixelH) {
-        this.collision = collisionLayer;
-        this.mapPixelW = mapPixelW;
-        this.mapPixelH = mapPixelH;
-        x = startX;
-        y = startY;
-
-        TextureRegion[][] regions = new TextureRegion[4][3];
-        for (int dir = 0; dir < 4; dir++) {
-            for (int f = 0; f < 3; f++) {
-                Pixmap pm = new Pixmap(32, 32, Pixmap.Format.RGBA8888);
-                String[] rows = PIXELS[dir][f];
-                for (int row = 0; row < FRAME_H; row++) {
-                    String line = rows[row];
-                    for (int col = 0; col < FRAME_W; col++) {
-                        char ch = line.charAt(col);
-                        if (ch == '.') continue;
-                        pm.setColor(colorOf(ch));
-                        pm.drawPixel(8 + col, 12 + row);
-                    }
-                }
-                Texture tex = new Texture(pm);
-                tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-                pm.dispose();
-                textures[dir][f] = tex;
-                regions[dir][f] = new TextureRegion(tex);
-            }
-        }
-        walk = new Animation[4];
-        for (int dir = 0; dir < 4; dir++) {
-            walk[dir] = new Animation<>(0.13f,
-                    regions[dir][0], regions[dir][1], regions[dir][2], regions[dir][1]);
-            walk[dir].setPlayMode(Animation.PlayMode.LOOP);
-            idle[dir] = regions[dir][1];
-        }
-
-        // Pose serang per arah (kanvas 32x32 penuh; pedang menyatu dengan badan)
-        for (int dir = 0; dir < 4; dir++) {
+    public Player(float startX, float startY) {
+        for (int f = 0; f < 2; f++) {
             Pixmap pm = new Pixmap(32, 32, Pixmap.Format.RGBA8888);
-            String[] rows = ATTACK_PIXELS[dir];
             for (int row = 0; row < 32; row++) {
-                String line = rows[row];
+                String line = PIXELS[f][row];
                 for (int col = 0; col < 32; col++) {
                     char ch = line.charAt(col);
                     if (ch == '.') continue;
@@ -253,193 +111,83 @@ public class Player {
                     pm.drawPixel(col, row);
                 }
             }
-            attackTextures[dir] = new Texture(pm);
-            attackTextures[dir].setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            textures[f] = new Texture(pm);
+            textures[f].setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
             pm.dispose();
-            attackRegions[dir] = new TextureRegion(attackTextures[dir]);
+            frames[f] = new TextureRegion(textures[f]);
         }
-
-        // Tekstur busur sabetan: lengkungan putih yang memudar di tepi,
-        // digambar prosedural dari uji jarak + sudut tiap piksel.
-        Pixmap apm = new Pixmap(32, 32, Pixmap.Format.RGBA8888);
-        for (int row = 0; row < 32; row++) {
-            for (int col = 0; col < 32; col++) {
-                double dx = col - 15.5;
-                double dy = 15.5 - row;
-                double r = Math.sqrt(dx * dx + dy * dy);
-                double ang = Math.toDegrees(Math.atan2(dy, dx));   // 90 = atas
-                if (r >= 11.5 && r <= 15.5 && ang >= 30.0 && ang <= 150.0) {
-                    double fadeR = 1.0 - Math.abs(r - 13.5) / 2.0;
-                    double fadeA = 1.0 - Math.abs(ang - 90.0) / 60.0;
-                    float a = (float) Math.max(0.0, Math.min(fadeR, fadeA));
-                    if (a > 0.03f) {
-                        apm.setColor(0.94f, 0.97f, 1f, a);
-                        apm.drawPixel(col, row);
-                    }
-                }
-            }
-        }
-        arcTex = new Texture(apm);
-        arcTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        apm.dispose();
-        arcRegion = new TextureRegion(arcTex);
+        x = startX;
+        y = startY;
     }
 
-    /** Kena serangan musuh dari titik (sx, sy): darah -1, terpental, kebal 1 detik. */
-    public void takeDamage(float sx, float sy) {
-        if (invulnTime > 0f || dead) return;
+    private static Color colorOf(char ch) {
+        switch (ch) {
+            case 'K': return new Color(38f / 255f, 40f / 255f, 58f / 255f, 1f);
+            case 'W': return new Color(232f / 255f, 236f / 255f, 244f / 255f, 1f);
+            case 'w': return new Color(170f / 255f, 180f / 255f, 200f / 255f, 1f);
+            case 'C': return new Color(80f / 255f, 220f / 255f, 255f / 255f, 1f);
+            case 'O': return new Color(255f / 255f, 150f / 255f, 40f / 255f, 1f);
+            case 'Y': return new Color(255f / 255f, 220f / 255f, 90f / 255f, 1f);
+            default:  return Color.WHITE;
+        }
+    }
+
+    public void update(float delta, float mx, float my, float viewW, float viewH) {
+        stateTime += delta;
+        if (invulnTime > 0f) invulnTime -= delta;
+        if (dead) return;
+        float len = (float) Math.sqrt(mx * mx + my * my);
+        if (len > 0.01f) {
+            float nx = mx / len;
+            float ny = my / len;
+            float mag = Math.min(1f, len);
+            x += nx * SPEED * mag * delta;
+            y += ny * SPEED * mag * delta;
+        }
+        if (x < 14f) x = 14f;
+        if (x > viewW - 14f) x = viewW - 14f;
+        if (y < 10f) y = 10f;
+        if (y > viewH - 10f) y = viewH - 10f;
+    }
+
+    /** Titik keluar peluru (ujung hidung pesawat). */
+    public float gunX() { return x + 14f; }
+    public float gunY() { return y; }
+
+    public boolean isInvulnerable() { return invulnTime > 0f; }
+
+    /** Kena serangan: darah berkurang, kebal sesaat. Return true bila serangan masuk. */
+    public boolean takeDamage() {
+        if (dead || invulnTime > 0f) return false;
         hp--;
-        invulnTime = 1f;
-        float dx = x - sx;
-        float dy = y - sy;
-        float len = (float) Math.sqrt(dx * dx + dy * dy);
-        if (len < 0.01f) {
-            dx = 0f;
-            dy = -1f;
-            len = 1f;
+        invulnTime = 1.2f;
+        if (hp <= 0) {
+            hp = 0;
+            dead = true;
         }
-        kbx = dx / len * 140f;
-        kby = dy / len * 140f;
-        if (hp <= 0) dead = true;
+        return true;
     }
 
-    /** Bangun lagi di titik (rx, ry) dengan darah penuh. */
     public void respawn(float rx, float ry) {
         x = rx;
         y = ry;
         hp = MAX_HP;
         dead = false;
         invulnTime = 2f;
-        attackTime = 0f;
-        kbx = kby = 0f;
-        facing = DOWN;
-    }
-
-    /** Mulai ayunan pedang (atau ulang dari awal kalau ditekan lagi). */
-    public void attack() {
-        attackTime = ATTACK_DUR;
-    }
-
-    public boolean isAttacking() {
-        return attackTime > 0f;
-    }
-
-    private static Color colorOf(char ch) {
-        switch (ch) {
-            case 'K': return new Color(38 / 255f, 40 / 255f, 58 / 255f, 1f);
-            case 'S': return new Color(198 / 255f, 208 / 255f, 226 / 255f, 1f);
-            case 's': return new Color(141 / 255f, 153 / 255f, 174 / 255f, 1f);
-            case 'd': return new Color(90 / 255f, 106 / 255f, 132 / 255f, 1f);
-            case 'G': return new Color(224 / 255f, 165 / 255f, 38 / 255f, 1f);
-            case 'B': return new Color(58 / 255f, 107 / 255f, 216 / 255f, 1f);
-            case 'b': return new Color(43 / 255f, 76 / 255f, 155 / 255f, 1f);
-            case 'R': return new Color(216 / 255f, 64 / 255f, 64 / 255f, 1f);
-            case 'r': return new Color(166 / 255f, 40 / 255f, 40 / 255f, 1f);
-            case 'W': return new Color(232 / 255f, 236 / 255f, 244 / 255f, 1f);
-            case 'w': return new Color(170 / 255f, 180 / 255f, 200 / 255f, 1f);
-            case 'H': return new Color(122 / 255f, 74 / 255f, 33 / 255f, 1f);
-            case 'F': return new Color(240 / 255f, 192 / 255f, 138 / 255f, 1f);
-            case 'E': return new Color(107 / 255f, 68 / 255f, 35 / 255f, 1f);
-            case 'e': return new Color(74 / 255f, 46 / 255f, 21 / 255f, 1f);
-            default:  return new Color(1f, 0f, 1f, 1f);
-        }
-    }
-
-    /** Gerakkan pemain; moveX/moveY dalam rentang -1..1. */
-    public void update(float delta, float moveX, float moveY) {
-        if (attackTime > 0f) attackTime -= delta;
-        if (invulnTime > 0f) invulnTime -= delta;
-
-        // Terpental karena serangan musuh
-        if (kbx != 0f || kby != 0f) {
-            if (!blocked(x + kbx * delta, y)) x += kbx * delta;
-            if (!blocked(x, y + kby * delta)) y += kby * delta;
-            float decay = Math.max(0f, 1f - 7f * delta);
-            kbx *= decay;
-            kby *= decay;
-            if (Math.abs(kbx) < 1f) kbx = 0f;
-            if (Math.abs(kby) < 1f) kby = 0f;
-        }
-
-        moving = moveX != 0 || moveY != 0;
-        if (!moving) {
-            stateTime = 0f;
-            return;
-        }
-        stateTime += delta;
-
-        if (Math.abs(moveX) > Math.abs(moveY)) {
-            facing = moveX < 0 ? LEFT : RIGHT;
-        } else {
-            facing = moveY < 0 ? DOWN : UP;
-        }
-
-        float dx = moveX * SPEED * delta;
-        float dy = moveY * SPEED * delta;
-        if (!blocked(x + dx, y)) x += dx;
-        if (!blocked(x, y + dy)) y += dy;
-
-        // Tetap di dalam peta
-        x = Math.max(HALF_W, Math.min(x, mapPixelW - HALF_W));
-        y = Math.max(0f, Math.min(y, mapPixelH - BOX_H));
-    }
-
-    /** Cek kotak kaki di posisi (px, py) menabrak tile padat atau tidak. */
-    private boolean blocked(float px, float py) {
-        return solid(px - HALF_W, py) || solid(px + HALF_W, py)
-                || solid(px - HALF_W, py + BOX_H) || solid(px + HALF_W, py + BOX_H);
-    }
-
-    private boolean solid(float wx, float wy) {
-        int tx = (int) (wx / collision.getTileWidth());
-        int ty = (int) (wy / collision.getTileHeight());
-        if (tx < 0 || ty < 0 || tx >= collision.getWidth() || ty >= collision.getHeight()) {
-            return true;
-        }
-        TiledMapTileLayer.Cell cell = collision.getCell(tx, ty);
-        return cell != null && cell.getTile() != null;
     }
 
     public void draw(SpriteBatch batch) {
-        boolean attacking = attackTime > 0f;
-        float p = attacking ? 1f - attackTime / ATTACK_DUR : 0f;
-        // Terjang kecil ke arah hadap di puncak ayunan — badan ikut bergerak
-        float lunge = attacking ? (float) Math.sin(Math.PI * p) * 3f : 0f;
-        float fx = facing == RIGHT ? 1f : facing == LEFT ? -1f : 0f;
-        float fy = facing == UP ? 1f : facing == DOWN ? -1f : 0f;
-        float ox = fx * lunge;
-        float oy = fy * lunge;
-
-        TextureRegion frame = attacking
-                ? attackRegions[facing]
-                : moving ? walk[facing].getKeyFrame(stateTime, true) : idle[facing];
+        if (dead) return;
+        TextureRegion frame = frames[(int) (stateTime * 14f) % 2];
         // Berkedip tembus pandang selagi kebal setelah kena serangan
         if (invulnTime > 0f && ((int) (invulnTime * 12f)) % 2 == 0) {
             batch.setColor(1f, 1f, 1f, 0.45f);
         }
-        // Kanvas gambar 32x32; kesatria 16x20 ada di tengah-bawahnya,
-        // jadi gambar digeser 16 ke kiri dari titik kaki.
-        batch.draw(frame, x - 16f + ox, y + oy, 32f, 32f);
+        batch.draw(frame, x - 16f, y - 16f, 32f, 32f);
         batch.setColor(1f, 1f, 1f, 1f);
-
-        if (attacking) {
-            // Busur sabetan di depan kesatria, memuncak di tengah ayunan
-            float alpha = (float) Math.sin(Math.PI * p) * 0.7f;
-            float facingAngle = facing == RIGHT ? 0f
-                    : facing == UP ? 90f
-                    : facing == LEFT ? 180f : -90f;
-            batch.setColor(1f, 1f, 1f, alpha);
-            batch.draw(arcRegion, x - 16f + ox, y - 6f + oy,
-                    16f, 16f, 32f, 32f, 1f, 1f, facingAngle - 90f);
-            batch.setColor(1f, 1f, 1f, 1f);
-        }
     }
 
     public void dispose() {
-        for (Texture[] row : textures) {
-            for (Texture t : row) t.dispose();
-        }
-        for (Texture t : attackTextures) t.dispose();
-        arcTex.dispose();
+        for (Texture t : textures) t.dispose();
     }
 }

@@ -3,149 +3,182 @@ package com.ikram.nexus;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.maps.tiled.TiledMap;
-import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
-import com.badlogic.gdx.maps.tiled.TiledMapTileSet;
-import com.badlogic.gdx.maps.tiled.TmxMapLoader;
-import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
-import com.badlogic.gdx.maps.tiled.TiledMapTile;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Locale;
 
 /**
- * Nx RPG — tahap awal.
- * Peta desa dari Tiled (.tmx), pemain (kesatria) bisa jalan 4 arah dengan
- * animasi, kamera mengikuti. Kendali: joystick tetap di kiri bawah layar
- * (sentuh + geser di separuh kiri layar) atau WASD / tombol panah;
- * tombol pedang di kanan bawah (atau spasi) untuk mengayunkan pedang.
- * Slime berkeliaran di desa: mendeteksi pemain yang mendekat, mengejar,
- * dan menyerang; pedang pemain bisa membunuhnya (3 ayunan).
+ * Nx Space — pertempuran luar angkasa (pengganti total mode RPG desa).
+ * Pesawat pemain di kiri, alien datang dari kanan: drone cepat dan gunner
+ * penembak. Kendali: joystick tetap di kiri bawah (sentuh + geser) atau
+ * WASD / panah untuk bergerak, tombol tembak di kanan bawah (tahan untuk
+ * menembak terus) atau SPASI. Semua sprite digambar prosedural.
  */
 public class NxRpgGame extends ApplicationAdapter {
 
-    private static final float VIEW_W = 320f;   // lebar dunia minimum (piksel peta);
-    private static final float VIEW_H = 180f;   // layar lebih lebar -> peta terlihat lebih luas, tanpa garis hitam
+    private static final float VIEW_W = 320f;
+    private static final float VIEW_H = 180f;
+    private static final float FIRE_INTERVAL = 0.14f;
+    private static final float PLAYER_BULLET_SPEED = 260f;
+    private static final float ENEMY_BULLET_SPEED = 78f;
 
     private OrthographicCamera camera;
     private Viewport viewport;
-    private OrthographicCamera screenCam;       // khusus UI layar (joystick)
+    private SpriteBatch batch;
+    private OrthographicCamera screenCam;
     private SpriteBatch uiBatch;
-    private Texture joyBaseTex, joyKnobTex;
-    private Texture atkBtnTex;
-    private float atkCenterX, atkCenterY, atkSize;
-    private final boolean[] prevTouched = new boolean[10];
-    private boolean attackTriggered;
+    private BitmapFont font;
+    private final GlyphLayout layout = new GlyphLayout();
 
-    private final ArrayList<Enemy> enemies = new ArrayList<>();
-    private Texture heartFullTex, heartEmptyTex, whiteTex;
-    private float dmgFlash;
-    private int lastHp = Player.MAX_HP;
-
-    private TiledMap map;
-    private OrthogonalTiledMapRenderer mapRenderer;
-    private float mapPixelW, mapPixelH;
+    private Texture joyBaseTex, joyKnobTex, fireBtnTex, whiteTex;
+    private Texture heartFullTex, heartEmptyTex;
 
     private Player player;
+    private final ArrayList<Enemy> enemies = new ArrayList<>();
+    private final ArrayList<Bullet> bullets = new ArrayList<>();
+    private final ArrayList<Particle> particles = new ArrayList<>();
 
-    // Joystick tetap (posisi dalam piksel layar, y ke atas)
+    // Bintang latar: 3 lapis paralaks [x, y, kecepatan, ukuran, terang]
+    private final ArrayList<float[]> stars = new ArrayList<>();
+
+    private Preferences prefs;
+    private int score;
+    private int hiScore;
+
+    private static final int STATE_PLAY = 0;
+    private static final int STATE_OVER = 1;
+    private int state = STATE_PLAY;
+    private float overTimer;
+    private float elapsed;
+    private float spawnTimer = 0.8f;
+    private float fireTimer;
+    private float hitFlash;
+
+    // Joystick tetap (piksel layar, y ke atas)
     private boolean joyActive = false;
+    private int joyPointer = -1;
     private float joyCenterX, joyCenterY;
     private float joyBaseSize, joyKnobSize, joyTravel;
-    private float knobX, knobY;                 // posisi tengah knob saat ini
-    private float moveX, moveY;                 // arah gerak akhir (ternormalisasi)
+    private float knobX, knobY;
+    private float moveX, moveY;
+
+    // Tombol tembak (piksel layar, y ke atas)
+    private int firePointer = -1;
+    private float fireCenterX, fireCenterY, fireBtnSize;
+    private boolean fireHeld = false;
+
+    private static class Bullet {
+        float x, y, vx, vy;
+        boolean friendly;
+        boolean dead;
+        Bullet(float x, float y, float vx, float vy, boolean friendly) {
+            this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.friendly = friendly;
+        }
+    }
+
+    private static class Particle {
+        float x, y, vx, vy, life, maxLife, size;
+        float r, g, b;
+        Particle(float x, float y, float vx, float vy, float life, float size,
+                 float r, float g, float b) {
+            this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+            this.life = life; this.maxLife = life; this.size = size;
+            this.r = r; this.g = g; this.b = b;
+        }
+    }
 
     @Override
     public void create() {
         camera = new OrthographicCamera();
         viewport = new ExtendViewport(VIEW_W, VIEW_H, camera);
+        batch = new SpriteBatch();
         screenCam = new OrthographicCamera();
         uiBatch = new SpriteBatch();
+        font = new BitmapFont();
 
         joyBaseTex = new Texture(Gdx.files.internal("ui/joy_base.png"));
         joyKnobTex = new Texture(Gdx.files.internal("ui/joy_knob.png"));
-        atkBtnTex = makeAttackButtonTexture();
-        layoutJoystick();
-
-        map = new TmxMapLoader().load("maps/village.tmx");
-        // Pixel art harus tajam: paksa filter Nearest pada tekstur tileset
-        HashSet<Texture> textures = new HashSet<>();
-        for (TiledMapTileSet set : map.getTileSets()) {
-            for (TiledMapTile tile : set) {
-                textures.add(tile.getTextureRegion().getTexture());
-            }
-        }
-        for (Texture t : textures) {
-            t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        }
-
-        mapPixelW = map.getProperties().get("width", Integer.class) * 16f;
-        mapPixelH = map.getProperties().get("height", Integer.class) * 16f;
-        mapRenderer = new OrthogonalTiledMapRenderer(map);
-
-        TiledMapTileLayer collision = (TiledMapTileLayer) map.getLayers().get("collision");
-        // Muncul di tengah persimpangan jalan desa
-        player = new Player(collision, mapPixelW / 2f, mapPixelH / 2f, mapPixelW, mapPixelH);
-
-        // Slime di tiga sudut desa (titik terverifikasi bebas dari tile padat)
-        enemies.add(new Enemy(collision, 104f, 56f, mapPixelW, mapPixelH));
-        enemies.add(new Enemy(collision, 456f, 56f, mapPixelW, mapPixelH));
-        enemies.add(new Enemy(collision, 296f, 360f, mapPixelW, mapPixelH));
-
+        fireBtnTex = makeFireButtonTexture();
+        whiteTex = makeWhiteTexture();
         heartFullTex = makeHeartTexture(true);
         heartEmptyTex = makeHeartTexture(false);
-        whiteTex = makeWhiteTexture();
-    }
 
-    /** Ikon hati untuk HUD darah (digambar dari peta piksel). */
-    private Texture makeHeartTexture(boolean full) {
-        String[] rows = {
-                ".XX......XX.",
-                "XXXX....XXXX",
-                "XXXXXXXXXXXX",
-                "XWXXXXXXXXXX",
-                "XXXXXXXXXXXX",
-                ".XXXXXXXXXX.",
-                "..XXXXXXXX..",
-                "...XXXXXX...",
-                "....XXXX....",
-                ".....XX.....",
-        };
-        com.badlogic.gdx.graphics.Pixmap pm = new com.badlogic.gdx.graphics.Pixmap(
-                12, 10, com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
-        for (int r = 0; r < rows.length; r++) {
-            for (int c = 0; c < 12; c++) {
-                char ch = rows[r].charAt(c);
-                if (ch == '.') continue;
-                if (full) {
-                    pm.setColor(ch == 'W' ? com.badlogic.gdx.graphics.Color.WHITE
-                            : new com.badlogic.gdx.graphics.Color(226 / 255f, 58 / 255f, 70 / 255f, 1f));
-                } else {
-                    pm.setColor(52 / 255f, 54 / 255f, 66 / 255f, 1f);
-                }
-                pm.drawPixel(c, r);
-            }
-        }
-        Texture tex = new Texture(pm);
-        tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        pm.dispose();
-        return tex;
+        prefs = Gdx.app.getPreferences("nx_space");
+        hiScore = prefs.getInteger("hi", 0);
     }
 
     private Texture makeWhiteTexture() {
-        com.badlogic.gdx.graphics.Pixmap pm = new com.badlogic.gdx.graphics.Pixmap(
-                1, 1, com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
-        pm.setColor(com.badlogic.gdx.graphics.Color.WHITE);
+        Pixmap pm = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pm.setColor(1f, 1f, 1f, 1f);
         pm.fill();
-        Texture tex = new Texture(pm);
+        Texture t = new Texture(pm);
         pm.dispose();
-        return tex;
+        return t;
+    }
+
+    private Texture makeHeartTexture(boolean full) {
+        String[] rows = {
+                ".XXX...XXX.",
+                "XXXXX.XXXXX",
+                "XXXXXXXXXXX",
+                "XXXXXXXXXXX",
+                ".XXXXXXXXX.",
+                "..XXXXXXX..",
+                "...XXXXX...",
+                "....XXX....",
+                ".....X.....",
+        };
+        Pixmap pm = new Pixmap(11, 9, Pixmap.Format.RGBA8888);
+        for (int row = 0; row < 9; row++) {
+            for (int col = 0; col < 11; col++) {
+                if (rows[row].charAt(col) != 'X') continue;
+                if (full) pm.setColor(0.92f, 0.25f, 0.30f, 1f);
+                else pm.setColor(0.30f, 0.32f, 0.42f, 1f);
+                pm.drawPixel(col, row);
+            }
+        }
+        Texture t = new Texture(pm);
+        t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        pm.dispose();
+        return t;
+    }
+
+    private Texture makeFireButtonTexture() {
+        Pixmap pm = new Pixmap(96, 96, Pixmap.Format.RGBA8888);
+        for (int y = 0; y < 96; y++) {
+            for (int x = 0; x < 96; x++) {
+                double d = Math.sqrt((x - 47.5) * (x - 47.5) + (y - 47.5) * (y - 47.5));
+                if (d >= 41 && d <= 47) {
+                    pm.setColor(0.55f, 0.90f, 1f, 0.85f);
+                    pm.drawPixel(x, y);
+                } else if (d < 41) {
+                    pm.setColor(0.35f, 0.75f, 0.95f, 0.16f);
+                    pm.drawPixel(x, y);
+                }
+                // Ikon peluru mendatar di tengah
+                boolean boltBody = y >= 43 && y <= 52 && x >= 28 && x <= 58;
+                boolean boltTip = x >= 59 && x <= 67 && Math.abs(y - 47.5) < (67 - x) * 0.62;
+                if (boltBody || boltTip) {
+                    pm.setColor(0.65f, 0.95f, 1f, 1f);
+                    pm.drawPixel(x, y);
+                }
+            }
+        }
+        Texture t = new Texture(pm);
+        t.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        pm.dispose();
+        return t;
     }
 
     private void layoutJoystick() {
@@ -158,37 +191,25 @@ public class NxRpgGame extends ApplicationAdapter {
         joyCenterY = margin + joyBaseSize / 2f;
         knobX = joyCenterX;
         knobY = joyCenterY;
-        // Tombol pedang di kanan bawah, simetris dengan joystick
-        atkSize = 84f * density;
-        atkCenterX = Gdx.graphics.getWidth() - margin - atkSize / 2f;
-        atkCenterY = margin + atkSize / 2f;
+        fireBtnSize = 92f * density;
+        fireCenterX = Gdx.graphics.getWidth() - margin - fireBtnSize / 2f;
+        fireCenterY = margin + fireBtnSize / 2f;
     }
 
-    /** Tekstur tombol pedang digambar dari kode (Pixmap): lingkaran baja
-     *  berisi ikon pedang diagonal. */
-    private Texture makeAttackButtonTexture() {
-        int s = 96;
-        com.badlogic.gdx.graphics.Pixmap pm =
-                new com.badlogic.gdx.graphics.Pixmap(s, s, com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
-        pm.setColor(0.55f, 0.62f, 0.72f, 0.95f);
-        pm.fillCircle(s / 2, s / 2, s / 2 - 1);
-        pm.setColor(0.07f, 0.08f, 0.12f, 0.78f);
-        pm.fillCircle(s / 2, s / 2, s / 2 - 7);
-        // Bilah: garis tebal dari gagang (kiri bawah) ke ujung (kanan atas)
-        pm.setColor(0.91f, 0.93f, 0.96f, 1f);
-        for (int i = -1; i <= 1; i++) pm.drawLine(37 + i, 59, 62 + i, 34);
-        // Pelindung emas, tegak lurus bilah di pangkalnya
-        pm.setColor(0.88f, 0.65f, 0.15f, 1f);
-        for (int i = 0; i <= 1; i++) pm.drawLine(32 + i, 54 + i, 41 + i, 63 + i);
-        // Gagang cokelat + bandul emas
-        pm.setColor(0.48f, 0.29f, 0.13f, 1f);
-        for (int i = -1; i <= 1; i++) pm.drawLine(35 + i, 61, 29 + i, 67);
-        pm.setColor(0.88f, 0.65f, 0.15f, 1f);
-        pm.fillCircle(27, 69, 3);
-        Texture tex = new Texture(pm);
-        tex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-        pm.dispose();
-        return tex;
+    private void initStars(float viewW, float viewH) {
+        stars.clear();
+        int[] counts = {36, 26, 16};
+        float[] speeds = {6f, 14f, 26f};
+        float[] sizes = {1f, 1.6f, 2.4f};
+        float[] brights = {0.35f, 0.6f, 1f};
+        for (int layer = 0; layer < 3; layer++) {
+            for (int i = 0; i < counts[layer]; i++) {
+                stars.add(new float[]{
+                        (float) Math.random() * viewW,
+                        (float) Math.random() * viewH,
+                        speeds[layer], sizes[layer], brights[layer]});
+            }
+        }
     }
 
     @Override
@@ -196,187 +217,383 @@ public class NxRpgGame extends ApplicationAdapter {
         viewport.update(width, height, true);
         screenCam.setToOrtho(false, width, height);
         layoutJoystick();
+        initStars(viewport.getWorldWidth(), viewport.getWorldHeight());
+        if (player == null) {
+            player = new Player(viewport.getWorldWidth() * 0.22f, viewport.getWorldHeight() / 2f);
+        }
+    }
+
+    private void readInput() {
+        moveX = 0f;
+        moveY = 0f;
+        fireHeld = Gdx.input.isKeyPressed(Input.Keys.SPACE);
+
+        if (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.LEFT)) moveX -= 1f;
+        if (Gdx.input.isKeyPressed(Input.Keys.D) || Gdx.input.isKeyPressed(Input.Keys.RIGHT)) moveX += 1f;
+        if (Gdx.input.isKeyPressed(Input.Keys.W) || Gdx.input.isKeyPressed(Input.Keys.UP)) moveY += 1f;
+        if (Gdx.input.isKeyPressed(Input.Keys.S) || Gdx.input.isKeyPressed(Input.Keys.DOWN)) moveY -= 1f;
+
+        int screenH = Gdx.graphics.getHeight();
+        for (int i = 0; i < 5; i++) {
+            if (!Gdx.input.isTouched(i)) {
+                if (joyPointer == i) { joyPointer = -1; joyActive = false; }
+                if (firePointer == i) { firePointer = -1; }
+                continue;
+            }
+            float sx = Gdx.input.getX(i);
+            float sy = screenH - Gdx.input.getY(i);
+            // Sentuhan yang belum punya peran ditentukan dari posisinya:
+            // dekat tombol tembak -> penembak, separuh kiri layar -> joystick.
+            if (joyPointer == -1 && firePointer != i) {
+                float fdx = sx - fireCenterX;
+                float fdy = sy - fireCenterY;
+                if (Math.sqrt(fdx * fdx + fdy * fdy) <= fireBtnSize * 0.62f) {
+                    firePointer = i;
+                }
+            }
+            if (firePointer == -1 && joyPointer == -1 && sx < Gdx.graphics.getWidth() * 0.55f) {
+                joyPointer = i;
+                joyActive = true;
+            }
+            if (firePointer == i) fireHeld = true;
+            if (joyPointer == i) {
+                float dx = sx - joyCenterX;
+                float dy = sy - joyCenterY;
+                float len = (float) Math.sqrt(dx * dx + dy * dy);
+                if (len > joyTravel) {
+                    dx = dx / len * joyTravel;
+                    dy = dy / len * joyTravel;
+                }
+                knobX = joyCenterX + dx;
+                knobY = joyCenterY + dy;
+                if (len > 4f) {
+                    moveX = dx / joyTravel;
+                    moveY = dy / joyTravel;
+                }
+            }
+        }
+        if (!joyActive) {
+            knobX = joyCenterX;
+            knobY = joyCenterY;
+        }
+    }
+
+    private void spawnEnemy(float viewW, float viewH) {
+        float y = 18f + (float) Math.random() * (viewH - 36f);
+        int type = (elapsed > 18f && Math.random() < 0.22)
+                ? Enemy.GUNNER : Enemy.DRONE;
+        enemies.add(new Enemy(type, viewW + 24f, y));
+    }
+
+    private void explosion(float x, float y, boolean big) {
+        int count = big ? 26 : 14;
+        float[][] colors = {
+                {1f, 0.62f, 0.16f}, {1f, 0.86f, 0.35f},
+                {1f, 1f, 1f}, {0.92f, 0.35f, 0.25f}};
+        for (int i = 0; i < count; i++) {
+            double ang = Math.random() * Math.PI * 2.0;
+            float spd = (big ? 30f : 20f) + (float) Math.random() * (big ? 100f : 70f);
+            float[] c = colors[(int) (Math.random() * colors.length)];
+            particles.add(new Particle(x, y,
+                    (float) Math.cos(ang) * spd, (float) Math.sin(ang) * spd,
+                    0.35f + (float) Math.random() * 0.45f,
+                    1.8f + (float) Math.random() * 1.8f, c[0], c[1], c[2]));
+        }
+    }
+
+    private void resetRun(float viewW, float viewH) {
+        enemies.clear();
+        bullets.clear();
+        score = 0;
+        elapsed = 0f;
+        spawnTimer = 0.8f;
+        fireTimer = 0f;
+        player.respawn(viewW * 0.22f, viewH / 2f);
+        state = STATE_PLAY;
+    }
+
+    private void saveHiScore() {
+        if (score > hiScore) {
+            hiScore = score;
+            prefs.putInteger("hi", hiScore);
+            prefs.flush();
+        }
     }
 
     @Override
     public void render() {
         float delta = Math.min(Gdx.graphics.getDeltaTime(), 1f / 30f);
-
-        readInput();
-        player.update(delta, moveX, moveY);
-
-        // Ayunan pedang mengenai slime di busur depan pemain
-        if (attackTriggered) {
-            attackTriggered = false;
-            float fx = player.facing == Player.RIGHT ? 1f
-                    : player.facing == Player.LEFT ? -1f : 0f;
-            float fy = player.facing == Player.UP ? 1f
-                    : player.facing == Player.DOWN ? -1f : 0f;
-            for (Enemy e : enemies) e.tryHitBySword(player.x, player.y, fx, fy);
-        }
-        for (Enemy e : enemies) e.update(delta, player);
-
-        // Pemain pingsan: bangun lagi di persimpangan, slime kembali ke asal
-        if (player.hp < lastHp) dmgFlash = player.dead ? 0.6f : 0.35f;
-        lastHp = player.hp;
-        if (player.dead) {
-            player.respawn(mapPixelW / 2f, mapPixelH / 2f);
-            for (Enemy e : enemies) e.reset();
-            lastHp = player.hp;
-        }
-        if (dmgFlash > 0f) dmgFlash -= delta;
-
-        updateCamera();
-
-        Gdx.gl.glClearColor(0.08f, 0.12f, 0.08f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
-        mapRenderer.setView(camera);
-        mapRenderer.render();
-
-        SpriteBatch batch = (SpriteBatch) mapRenderer.getBatch();
-        batch.begin();
-        for (Enemy e : enemies) e.draw(batch);
-        player.draw(batch);
-        batch.end();
-
-        drawJoystick();
-    }
-
-    private void updateCamera() {
         float viewW = viewport.getWorldWidth();
         float viewH = viewport.getWorldHeight();
-        float cx = player.x;
-        float cy = player.y + 16f;
-        // Jepit kamera supaya tidak keluar peta; kalau pandangan lebih besar
-        // dari peta di satu sumbu, kamera diam di tengah sumbu itu
-        cx = viewW >= mapPixelW ? mapPixelW / 2f
-                : Math.max(viewW / 2f, Math.min(cx, mapPixelW - viewW / 2f));
-        cy = viewH >= mapPixelH ? mapPixelH / 2f
-                : Math.max(viewH / 2f, Math.min(cy, mapPixelH - viewH / 2f));
-        camera.position.set(cx, cy, 0f);
-        camera.update();
-    }
 
-    /** Baca keyboard + joystick sentuh, hasil akhir di moveX/moveY (ternormalisasi). */
-    private void readInput() {
-        // Tombol pedang: sentuhan baru (pointer mana pun) di dalam tombol
-        float atkR = atkSize * 0.6f;
-        for (int p = 0; p < prevTouched.length; p++) {
-            boolean t = Gdx.input.isTouched(p);
-            if (t && !prevTouched[p]) {
-                float tx = Gdx.input.getX(p);
-                float ty = Gdx.graphics.getHeight() - Gdx.input.getY(p);
-                float ddx = tx - atkCenterX;
-                float ddy = ty - atkCenterY;
-                if (ddx * ddx + ddy * ddy <= atkR * atkR) {
-                    player.attack();
-                    attackTriggered = true;
+        readInput();
+
+        // Bintang selalu bergerak
+        for (float[] s : stars) {
+            s[0] -= s[2] * delta;
+            if (s[0] < -3f) {
+                s[0] = viewW + 3f;
+                s[1] = (float) Math.random() * viewH;
+            }
+        }
+
+        if (hitFlash > 0f) hitFlash -= delta;
+
+        if (state == STATE_PLAY) {
+            elapsed += delta;
+            player.update(delta, moveX, moveY, viewW, viewH);
+
+            // Menembak (tahan tombol / spasi)
+            fireTimer -= delta;
+            if (fireHeld && fireTimer <= 0f && !player.dead) {
+                bullets.add(new Bullet(player.gunX(), player.gunY(),
+                        PLAYER_BULLET_SPEED, 0f, true));
+                fireTimer = FIRE_INTERVAL;
+            }
+
+            // Gelombang musuh
+            spawnTimer -= delta;
+            if (spawnTimer <= 0f) {
+                spawnEnemy(viewW, viewH);
+                float interval = Math.max(0.42f, 1.05f - elapsed * 0.008f);
+                spawnTimer = interval * (0.7f + (float) Math.random() * 0.6f);
+            }
+
+            // Musuh bergerak + gunner menembak
+            for (Enemy e : enemies) {
+                e.update(delta);
+                if (e.wantsFire() && e.x < viewW - 4f && e.x > player.x + 10f && !player.dead) {
+                    float dx = player.x - e.x;
+                    float dy = player.y - e.y;
+                    float len = (float) Math.sqrt(dx * dx + dy * dy);
+                    if (len > 1f) {
+                        bullets.add(new Bullet(e.x - 10f, e.y,
+                                dx / len * ENEMY_BULLET_SPEED,
+                                dy / len * ENEMY_BULLET_SPEED, false));
+                    }
                 }
             }
-            prevTouched[p] = t;
-        }
-        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
-            player.attack();
-            attackTriggered = true;
-        }
 
-        float dx = 0f, dy = 0f;
-
-        if (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.LEFT)) dx -= 1f;
-        if (Gdx.input.isKeyPressed(Input.Keys.D) || Gdx.input.isKeyPressed(Input.Keys.RIGHT)) dx += 1f;
-        if (Gdx.input.isKeyPressed(Input.Keys.W) || Gdx.input.isKeyPressed(Input.Keys.UP)) dy += 1f;
-        if (Gdx.input.isKeyPressed(Input.Keys.S) || Gdx.input.isKeyPressed(Input.Keys.DOWN)) dy -= 1f;
-
-        float density = Gdx.graphics.getDensity();
-        float deadzone = 8f * density;
-
-        // Joystick: sentuhan yang mulai di separuh kiri layar mengendalikan knob
-        if (Gdx.input.justTouched() && Gdx.input.getX() < Gdx.graphics.getWidth() * 0.55f) {
-            joyActive = true;
-        }
-        if (joyActive && Gdx.input.isTouched()) {
-            float tx = Gdx.input.getX();
-            float ty = Gdx.graphics.getHeight() - Gdx.input.getY();
-            float vx = tx - joyCenterX;
-            float vy = ty - joyCenterY;
-            float len = (float) Math.sqrt(vx * vx + vy * vy);
-            float clamped = Math.min(len, joyTravel);
-            if (len > 0.01f) {
-                knobX = joyCenterX + vx / len * clamped;
-                knobY = joyCenterY + vy / len * clamped;
+            // Peluru bergerak
+            for (Bullet b : bullets) {
+                b.x += b.vx * delta;
+                b.y += b.vy * delta;
+                if (b.x < -12f || b.x > viewW + 12f || b.y < -12f || b.y > viewH + 12f) {
+                    b.dead = true;
+                }
             }
-            if (len > deadzone) {
-                dx = vx / len;
-                dy = vy / len;
+
+            // Tabrakan: peluru pemain vs musuh
+            for (Bullet b : bullets) {
+                if (!b.friendly || b.dead) continue;
+                for (Enemy e : enemies) {
+                    float dx = b.x - e.x;
+                    float dy = b.y - e.y;
+                    float rr = e.radius + 3f;
+                    if (dx * dx + dy * dy < rr * rr) {
+                        b.dead = true;
+                        if (e.hit()) {
+                            e.hp = 0; // ditandai untuk ledakan di bawah
+                        }
+                        break;
+                    }
+                }
+            }
+            // Musuh yang hancur -> ledakan + skor
+            Iterator<Enemy> eit = enemies.iterator();
+            while (eit.hasNext()) {
+                Enemy e = eit.next();
+                if (e.hp <= 0) {
+                    explosion(e.x, e.y, e.type == Enemy.GUNNER);
+                    score += e.scoreValue;
+                    eit.remove();
+                    continue;
+                }
+                if (e.isGone()) {
+                    eit.remove();
+                    continue;
+                }
+                // Tabrakan badan musuh vs pesawat
+                if (!player.dead && !player.isInvulnerable()) {
+                    float dx = e.x - player.x;
+                    float dy = e.y - player.y;
+                    float rr = e.radius + Player.RADIUS;
+                    if (dx * dx + dy * dy < rr * rr) {
+                        explosion(e.x, e.y, false);
+                        eit.remove();
+                        if (player.takeDamage()) onPlayerHit(viewW, viewH);
+                    }
+                }
+            }
+            // Peluru musuh vs pesawat
+            if (!player.dead && !player.isInvulnerable()) {
+                for (Bullet b : bullets) {
+                    if (b.friendly || b.dead) continue;
+                    float dx = b.x - player.x;
+                    float dy = b.y - player.y;
+                    float rr = Player.RADIUS + 3f;
+                    if (dx * dx + dy * dy < rr * rr) {
+                        b.dead = true;
+                        if (player.takeDamage()) onPlayerHit(viewW, viewH);
+                        break;
+                    }
+                }
+            }
+            Iterator<Bullet> bit = bullets.iterator();
+            while (bit.hasNext()) {
+                if (bit.next().dead) bit.remove();
             }
         } else {
-            joyActive = false;
-            knobX = joyCenterX;
-            knobY = joyCenterY;
+            // GAME OVER: musuh tetap melayang, lalu mulai lagi sendiri
+            for (Enemy e : enemies) e.update(delta);
+            overTimer -= delta;
+            if (overTimer <= 0f) resetRun(viewW, viewH);
         }
 
-        // Normalisasi diagonal keyboard
-        float len = (float) Math.sqrt(dx * dx + dy * dy);
-        if (len > 1f) {
-            dx /= len;
-            dy /= len;
+        // Partikel ledakan
+        Iterator<Particle> pit = particles.iterator();
+        while (pit.hasNext()) {
+            Particle p = pit.next();
+            p.life -= delta;
+            if (p.life <= 0f) {
+                pit.remove();
+                continue;
+            }
+            p.x += p.vx * delta;
+            p.y += p.vy * delta;
+            p.vx *= (1f - 1.6f * delta);
+            p.vy *= (1f - 1.6f * delta);
         }
-        moveX = dx;
-        moveY = dy;
+
+        draw(viewW, viewH);
     }
 
-    private void drawJoystick() {
+    private void onPlayerHit(float viewW, float viewH) {
+        hitFlash = 0.3f;
+        explosion(player.x, player.y, false);
+        if (player.dead) {
+            explosion(player.x, player.y, true);
+            saveHiScore();
+            state = STATE_OVER;
+            overTimer = 1.8f;
+        }
+    }
+
+    private void draw(float viewW, float viewH) {
+        Gdx.gl.glClearColor(0.02f, 0.02f, 0.06f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
+        // --- Dunia ---
+        camera.update();
+        batch.setProjectionMatrix(camera.combined);
+        batch.begin();
+        for (float[] s : stars) {
+            batch.setColor(1f, 1f, 1f, s[4]);
+            batch.draw(whiteTex, s[0], s[1], s[3], s[3]);
+        }
+        batch.setColor(1f, 1f, 1f, 1f);
+        for (Bullet b : bullets) {
+            if (b.friendly) {
+                batch.setColor(0.45f, 0.85f, 1f, 0.35f);
+                batch.draw(whiteTex, b.x - 6f, b.y - 2.5f, 12f, 5f);
+                batch.setColor(0.85f, 0.98f, 1f, 1f);
+                batch.draw(whiteTex, b.x - 3.5f, b.y - 1f, 7f, 2f);
+            } else {
+                batch.setColor(1f, 0.40f, 0.85f, 0.35f);
+                batch.draw(whiteTex, b.x - 4.5f, b.y - 4.5f, 9f, 9f);
+                batch.setColor(1f, 0.65f, 0.95f, 1f);
+                batch.draw(whiteTex, b.x - 2f, b.y - 2f, 4f, 4f);
+            }
+        }
+        batch.setColor(1f, 1f, 1f, 1f);
+        for (Enemy e : enemies) e.draw(batch);
+        player.draw(batch);
+        for (Particle p : particles) {
+            float a = Math.max(0f, p.life / p.maxLife);
+            batch.setColor(p.r, p.g, p.b, a);
+            batch.draw(whiteTex, p.x - p.size / 2f, p.y - p.size / 2f, p.size, p.size);
+        }
+        batch.setColor(1f, 1f, 1f, 1f);
+        batch.end();
+
+        // --- UI layar ---
         uiBatch.setProjectionMatrix(screenCam.combined);
         uiBatch.begin();
-        // Basis sedikit redup saat tidak dipakai, terang saat aktif
-        uiBatch.setColor(1f, 1f, 1f, joyActive ? 0.95f : 0.6f);
-        uiBatch.draw(joyBaseTex,
-                joyCenterX - joyBaseSize / 2f, joyCenterY - joyBaseSize / 2f,
-                joyBaseSize, joyBaseSize);
-        uiBatch.setColor(1f, 1f, 1f, joyActive ? 1f : 0.75f);
-        uiBatch.draw(joyKnobTex,
-                knobX - joyKnobSize / 2f, knobY - joyKnobSize / 2f,
-                joyKnobSize, joyKnobSize);
-        // Tombol pedang: menyala penuh selagi ayunan berjalan
-        uiBatch.setColor(1f, 1f, 1f, player.isAttacking() ? 1f : 0.8f);
-        uiBatch.draw(atkBtnTex,
-                atkCenterX - atkSize / 2f, atkCenterY - atkSize / 2f,
-                atkSize, atkSize);
-        uiBatch.setColor(1f, 1f, 1f, 1f);
-
-        // HUD darah: hati penuh/kosong di kiri atas
         float density = Gdx.graphics.getDensity();
-        float heartSize = 22f * density;
-        float hx = 12f * density;
-        float hy = Gdx.graphics.getHeight() - 12f * density - heartSize;
+        float screenW = Gdx.graphics.getWidth();
+        float screenH = Gdx.graphics.getHeight();
+
+        // Hati di kiri atas
+        float heartW = 22f * density;
+        float heartH = 18f * density;
         for (int i = 0; i < Player.MAX_HP; i++) {
-            uiBatch.draw(i < player.hp ? heartFullTex : heartEmptyTex,
-                    hx + i * (heartSize + 5f * density), hy, heartSize, heartSize * 10f / 12f);
+            Texture t = i < player.hp ? heartFullTex : heartEmptyTex;
+            uiBatch.draw(t, 14f * density + i * (heartW + 5f * density),
+                    screenH - 14f * density - heartH, heartW, heartH);
         }
 
-        // Kilatan merah sesaat saat kena serangan
-        if (dmgFlash > 0f) {
-            uiBatch.setColor(0.85f, 0.1f, 0.1f, Math.min(0.4f, dmgFlash));
-            uiBatch.draw(whiteTex, 0f, 0f,
-                    Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        // Skor di kanan atas
+        font.getData().setScale(1.7f * density);
+        font.setColor(1f, 1f, 1f, 1f);
+        String scoreText = "SCORE " + String.format(Locale.US, "%06d", score);
+        layout.setText(font, scoreText);
+        font.draw(uiBatch, scoreText, screenW - 14f * density - layout.width,
+                screenH - 12f * density);
+        font.getData().setScale(1.1f * density);
+        font.setColor(0.75f, 0.85f, 1f, 1f);
+        String hiText = "HI " + String.format(Locale.US, "%06d", hiScore);
+        layout.setText(font, hiText);
+        font.draw(uiBatch, hiText, screenW - 14f * density - layout.width,
+                screenH - 44f * density);
+
+        // Kilat merah saat kena serangan
+        if (hitFlash > 0f) {
+            uiBatch.setColor(0.9f, 0.15f, 0.15f, hitFlash * 0.45f);
+            uiBatch.draw(whiteTex, 0f, 0f, screenW, screenH);
             uiBatch.setColor(1f, 1f, 1f, 1f);
+        }
+
+        // Joystick + tombol tembak
+        uiBatch.setColor(1f, 1f, 1f, joyActive ? 0.95f : 0.75f);
+        uiBatch.draw(joyBaseTex, joyCenterX - joyBaseSize / 2f, joyCenterY - joyBaseSize / 2f,
+                joyBaseSize, joyBaseSize);
+        uiBatch.draw(joyKnobTex, knobX - joyKnobSize / 2f, knobY - joyKnobSize / 2f,
+                joyKnobSize, joyKnobSize);
+        uiBatch.setColor(1f, 1f, 1f, fireHeld ? 1f : 0.8f);
+        uiBatch.draw(fireBtnTex, fireCenterX - fireBtnSize / 2f, fireCenterY - fireBtnSize / 2f,
+                fireBtnSize, fireBtnSize);
+        uiBatch.setColor(1f, 1f, 1f, 1f);
+
+        // Tulisan GAME OVER
+        if (state == STATE_OVER) {
+            font.getData().setScale(3.2f * density);
+            font.setColor(1f, 0.45f, 0.40f, 1f);
+            layout.setText(font, "GAME OVER");
+            font.draw(uiBatch, "GAME OVER",
+                    (screenW - layout.width) / 2f, screenH * 0.62f);
+            font.getData().setScale(1.6f * density);
+            font.setColor(1f, 1f, 1f, 1f);
+            String finalScore = "SCORE " + String.format(Locale.US, "%06d", score);
+            layout.setText(font, finalScore);
+            font.draw(uiBatch, finalScore,
+                    (screenW - layout.width) / 2f, screenH * 0.62f - 52f * density);
         }
         uiBatch.end();
     }
 
     @Override
     public void dispose() {
-        player.dispose();
-        for (Enemy e : enemies) e.dispose();
-        heartFullTex.dispose();
-        heartEmptyTex.dispose();
-        whiteTex.dispose();
-        mapRenderer.dispose();
-        map.dispose();
+        saveHiScore();
+        batch.dispose();
+        uiBatch.dispose();
+        font.dispose();
         joyBaseTex.dispose();
         joyKnobTex.dispose();
-        atkBtnTex.dispose();
-        uiBatch.dispose();
+        fireBtnTex.dispose();
+        whiteTex.dispose();
+        heartFullTex.dispose();
+        heartEmptyTex.dispose();
+        player.dispose();
+        Enemy.disposeShared();
     }
 }
