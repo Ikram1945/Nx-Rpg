@@ -1195,6 +1195,18 @@ public class SpaceWarGame extends ApplicationAdapter {
 
     // ================= MENU UTAMA, TOKO & UPGRADE =================
 
+    /**
+     * Skala UI menu: dihitung dari TINGGI LAYAR sebenarnya terhadap
+     * tinggi acuan 720 — BUKAN dari density mentah. Density HP bisa
+     * 3x sementara tinggi pikselnya hanya ~1080, jadi layout berbasis
+     * density membengkak (tampak ter-zoom) dan tombolnya tumpuk /
+     * keluar layar. Dengan skala ini menu tampil proporsional di
+     * layar mana pun.
+     */
+    private static float skalaMenu(float screenH) {
+        return Math.max(0.5f, Math.min(2f, screenH / 720f));
+    }
+
     /** Tata letak menu (piksel layar; rect[1] = tepi ATAS tombol). */
     private void layoutMenu(float density, float screenW, float screenH) {
         float bw = Math.min(300f * density, screenW * 0.82f);
@@ -1229,9 +1241,9 @@ public class SpaceWarGame extends ApplicationAdapter {
 
     /** Input menu: sentuhan/klik di HP, tombol papan ketik di desktop. */
     private void tanganiMenu(float viewW, float viewH) {
-        float density = Gdx.graphics.getDensity();
         float screenW = Gdx.graphics.getWidth();
         float screenH = Gdx.graphics.getHeight();
+        float density = skalaMenu(screenH);
         layoutMenu(density, screenW, screenH);
         if (state == STATE_MENU) {
             if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
@@ -1986,7 +1998,7 @@ public class SpaceWarGame extends ApplicationAdapter {
         float screenH = Gdx.graphics.getHeight();
 
         if (diMenu()) {
-            gambarMenu(density, screenW, screenH);
+            gambarMenu(skalaMenu(screenH), screenW, screenH);
             uiBatch.end();
             return;
         }
