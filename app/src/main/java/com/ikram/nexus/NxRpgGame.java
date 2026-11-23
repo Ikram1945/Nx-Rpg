@@ -31,7 +31,6 @@ public class NxRpgGame extends ApplicationAdapter {
     private static final float VIEW_H = 180f;
     private static final float FIRE_INTERVAL = 0.14f;
     private static final float PLAYER_BULLET_SPEED = 300f;
-    private static final float ENEMY_BULLET_SPEED = 78f;
 
     private OrthographicCamera camera;
     private Viewport viewport;
@@ -85,8 +84,11 @@ public class NxRpgGame extends ApplicationAdapter {
         float x, y, vx, vy;
         boolean friendly;
         boolean dead;
-        Bullet(float x, float y, float vx, float vy, boolean friendly) {
-            this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.friendly = friendly;
+        /** Penembaknya untuk peluru musuh (agar tidak kena dirinya sendiri). */
+        Enemy owner;
+        Bullet(float x, float y, float vx, float vy, boolean friendly, Enemy owner) {
+            this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+            this.friendly = friendly; this.owner = owner;
         }
     }
 
@@ -325,6 +327,126 @@ public class NxRpgGame extends ApplicationAdapter {
         enemies.add(new Enemy(type, viewW + 24f, y));
     }
 
+    /**
+     * Otak bot musuh: pilih lawan terdekat (pemain diberi sedikit
+     * prioritas lewat bias jarak 0.8, tapi sesama alien yang lebih
+     * dekat tetap diserang), lalu kemudikan pesawatnya menjaga jarak
+     * tempur sambil menyamping (strafe) dan menghindari kerumunan.
+     */
+    private void updateEnemyAi(Enemy e, float delta, float viewW, float viewH) {
+        // Sasaran lama gugur? Lupakan.
+        if (e.hasTarget) {
+            if (e.targetIsPlayer && player.dead) e.hasTarget = false;
+            if (!e.targetIsPlayer && (e.targetEnemy == null
+                    || e.targetEnemy.hp <= 0 || !enemies.contains(e.targetEnemy))) {
+                e.hasTarget = false;
+            }
+        }
+        e.retargetTimer -= delta;
+        if (e.retargetTimer <= 0f || !e.hasTarget) {
+            e.retargetTimer = 1.2f + (float) Math.random() * 1.0f;
+            float best = Float.MAX_VALUE;
+            e.hasTarget = false;
+            if (!player.dead) {
+                float dx = player.x - e.x;
+                float dy = player.y - e.y;
+                float d = (float) Math.sqrt(dx * dx + dy * dy) * 0.8f;
+                if (d < best) {
+                    best = d;
+                    e.targetIsPlayer = true;
+                    e.targetEnemy = null;
+                    e.hasTarget = true;
+                }
+            }
+            for (Enemy o : enemies) {
+                if (o == e || o.hp <= 0) continue;
+                float dx = o.x - e.x;
+                float dy = o.y - e.y;
+                float d = (float) Math.sqrt(dx * dx + dy * dy);
+                if (d < best) {
+                    best = d;
+                    e.targetIsPlayer = false;
+                    e.targetEnemy = o;
+                    e.hasTarget = true;
+                }
+            }
+        }
+
+        float desiredX;
+        float desiredY;
+        if (e.hasTarget) {
+            float tx = e.targetIsPlayer ? player.x : e.targetEnemy.x;
+            float ty = e.targetIsPlayer ? player.y : e.targetEnemy.y;
+            e.targetX = tx;
+            e.targetY = ty;
+            float dx = tx - e.x;
+            float dy = ty - e.y;
+            float dist = (float) Math.sqrt(dx * dx + dy * dy);
+            e.targetDist = dist;
+            float ux = dist > 1f ? dx / dist : 1f;
+            float uy = dist > 1f ? dy / dist : 0f;
+            // Radial: mendekat bila terlalu jauh, mundur bila terlalu dekat
+            float radial = 0f;
+            if (dist > e.prefRange + 18f) radial = 1f;
+            else if (dist < e.prefRange - 18f) radial = -0.8f;
+            // Strafe: bergerak tegak lurus sasaran, arah berganti-ganti
+            e.strafeTimer -= delta;
+            if (e.strafeTimer <= 0f) {
+                e.strafeTimer = 1.4f + (float) Math.random() * 1.6f;
+                if (Math.random() < 0.45) e.strafeDir = -e.strafeDir;
+            }
+            float px = -uy * e.strafeDir;
+            float py = ux * e.strafeDir;
+            desiredX = (ux * radial + px * 0.7f) * e.maxSpeed - 10f;
+            desiredY = (uy * radial + py * 0.7f) * e.maxSpeed;
+        } else {
+            // Tanpa sasaran: jelajah ke kiri dengan gelombang ringan
+            e.targetDist = Float.MAX_VALUE;
+            desiredX = -e.cruise;
+            desiredY = (float) Math.sin(e.time * 2.2f + e.phase) * 14f;
+        }
+        // Separasi: jangan menumpuk dengan bot lain
+        for (Enemy o : enemies) {
+            if (o == e) continue;
+            float dx = e.x - o.x;
+            float dy = e.y - o.y;
+            float d2 = dx * dx + dy * dy;
+            if (d2 < 28f * 28f && d2 > 0.01f) {
+                float d = (float) Math.sqrt(d2);
+                desiredX += dx / d * (28f - d) * 2.2f;
+                desiredY += dy / d * (28f - d) * 2.2f;
+            }
+        }
+        // Jauhi tepi atas/bawah layar
+        if (e.y < 26f) desiredY += (26f - e.y) * 3f;
+        if (e.y > viewH - 26f) desiredY -= (e.y - (viewH - 26f)) * 3f;
+        // Batasi kecepatan maksimum, lalu ratakan kemudi
+        float sp = (float) Math.sqrt(desiredX * desiredX + desiredY * desiredY);
+        if (sp > e.maxSpeed) {
+            desiredX = desiredX / sp * e.maxSpeed;
+            desiredY = desiredY / sp * e.maxSpeed;
+        }
+        float k = Math.min(1f, 5f * delta);
+        e.vx += (desiredX - e.vx) * k;
+        e.vy += (desiredY - e.vy) * k;
+    }
+
+    /** Buat peluru bot yang diarahkan ke sasarannya saat ini. */
+    private void spawnEnemyBullet(Enemy e) {
+        float dx = e.targetX - e.x;
+        float dy = e.targetY - e.y;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 1f) return;
+        float spread = e.type == Enemy.DRONE ? 0.09f : 0.02f;
+        float ang = (float) Math.atan2(dy, dx)
+                + (float) (Math.random() * 2.0 - 1.0) * spread;
+        float spd = e.type == Enemy.DRONE ? 122f : 105f;
+        float ca = (float) Math.cos(ang);
+        float sa = (float) Math.sin(ang);
+        bullets.add(new Bullet(e.x + ca * (e.radius + 2f), e.y + sa * (e.radius + 2f),
+                ca * spd, sa * spd, false, e));
+    }
+
     private void explosion(float x, float y, boolean big) {
         int count = big ? 26 : 14;
         float[][] colors = {
@@ -395,30 +517,30 @@ public class NxRpgGame extends ApplicationAdapter {
             fireTimer -= delta;
             if (fireHeld && fireTimer <= 0f && !player.dead) {
                 bullets.add(new Bullet(player.gunX(), player.gunY(),
-                        PLAYER_BULLET_SPEED, 0f, true));
+                        PLAYER_BULLET_SPEED, 0f, true, null));
                 fireTimer = FIRE_INTERVAL;
             }
 
-            // Gelombang musuh
+            // Gelombang musuh (maksimal 7 bot hidup bersamaan)
             spawnTimer -= delta;
             if (spawnTimer <= 0f) {
-                spawnEnemy(viewW, viewH);
-                float interval = Math.max(0.42f, 1.05f - elapsed * 0.008f);
-                spawnTimer = interval * (0.7f + (float) Math.random() * 0.6f);
+                if (enemies.size() < 7) {
+                    spawnEnemy(viewW, viewH);
+                    float interval = Math.max(0.42f, 1.05f - elapsed * 0.008f);
+                    spawnTimer = interval * (0.7f + (float) Math.random() * 0.6f);
+                } else {
+                    spawnTimer = 0.35f;
+                }
             }
 
-            // Musuh bergerak + gunner menembak
+            // Musuh: AI memilih sasaran & mengemudi, lalu bergerak & menembak
             for (Enemy e : enemies) {
-                e.update(delta);
-                if (e.wantsFire() && e.x < viewW - 4f && e.x > player.x + 10f && !player.dead) {
-                    float dx = player.x - e.x;
-                    float dy = player.y - e.y;
-                    float len = (float) Math.sqrt(dx * dx + dy * dy);
-                    if (len > 1f) {
-                        bullets.add(new Bullet(e.x - 10f, e.y,
-                                dx / len * ENEMY_BULLET_SPEED,
-                                dy / len * ENEMY_BULLET_SPEED, false));
-                    }
+                updateEnemyAi(e, delta, viewW, viewH);
+                e.update(delta, viewW, viewH);
+                boolean engaged = e.hasTarget && e.targetDist <= 205f
+                        && e.x < viewW - 4f && e.x > 4f;
+                if (e.updateFire(delta, engaged)) {
+                    spawnEnemyBullet(e);
                 }
             }
 
@@ -435,25 +557,24 @@ public class NxRpgGame extends ApplicationAdapter {
             for (Bullet b : bullets) {
                 if (!b.friendly || b.dead) continue;
                 for (Enemy e : enemies) {
+                    if (e.hp <= 0) continue;
                     float dx = b.x - e.x;
                     float dy = b.y - e.y;
                     float rr = e.radius + 3f;
                     if (dx * dx + dy * dy < rr * rr) {
                         b.dead = true;
-                        if (e.hit()) {
-                            e.hp = 0; // ditandai untuk ledakan di bawah
-                        }
+                        if (e.hit()) e.killedByPlayer = true;
                         break;
                     }
                 }
             }
-            // Musuh yang hancur -> ledakan + skor
+            // Musuh yang hancur -> ledakan; skor hanya bila pemain yang membunuh
             Iterator<Enemy> eit = enemies.iterator();
             while (eit.hasNext()) {
                 Enemy e = eit.next();
                 if (e.hp <= 0) {
                     explosion(e.x, e.y, e.type == Enemy.GUNNER);
-                    score += e.scoreValue;
+                    if (e.killedByPlayer) score += e.scoreValue;
                     eit.remove();
                     continue;
                 }
@@ -461,28 +582,45 @@ public class NxRpgGame extends ApplicationAdapter {
                     eit.remove();
                     continue;
                 }
-                // Tabrakan badan musuh vs pesawat
+                // Tabrakan badan musuh vs pesawat: musuh rusak berat (2),
+                // pemain -1 hati. Gunner yang tebal bisa selamat dari tabrakan.
                 if (!player.dead && !player.isInvulnerable()) {
                     float dx = e.x - player.x;
                     float dy = e.y - player.y;
                     float rr = e.radius + Player.RADIUS;
                     if (dx * dx + dy * dy < rr * rr) {
-                        explosion(e.x, e.y, false);
-                        eit.remove();
+                        if (e.damage(2)) {
+                            e.killedByPlayer = true;
+                            explosion(e.x, e.y, e.type == Enemy.GUNNER);
+                            score += e.scoreValue;
+                            eit.remove();
+                        }
                         if (player.takeDamage()) onPlayerHit(viewW, viewH);
                     }
                 }
             }
-            // Peluru musuh vs pesawat
-            if (!player.dead && !player.isInvulnerable()) {
-                for (Bullet b : bullets) {
-                    if (b.friendly || b.dead) continue;
+            // Peluru musuh vs pesawat DAN vs musuh lain (sesama alien bisa kena,
+            // kecuali penembaknya sendiri)
+            for (Bullet b : bullets) {
+                if (b.friendly || b.dead) continue;
+                if (!player.dead && !player.isInvulnerable()) {
                     float dx = b.x - player.x;
                     float dy = b.y - player.y;
                     float rr = Player.RADIUS + 3f;
                     if (dx * dx + dy * dy < rr * rr) {
                         b.dead = true;
                         if (player.takeDamage()) onPlayerHit(viewW, viewH);
+                        continue;
+                    }
+                }
+                for (Enemy e : enemies) {
+                    if (e == b.owner || e.hp <= 0) continue;
+                    float dx = b.x - e.x;
+                    float dy = b.y - e.y;
+                    float rr = e.radius + 3f;
+                    if (dx * dx + dy * dy < rr * rr) {
+                        b.dead = true;
+                        e.damage(1); // hancurnya disapu pada iterasi musuh berikutnya
                         break;
                     }
                 }
@@ -492,8 +630,12 @@ public class NxRpgGame extends ApplicationAdapter {
                 if (bit.next().dead) bit.remove();
             }
         } else {
-            // GAME OVER: musuh tetap melayang, lalu mulai lagi sendiri
-            for (Enemy e : enemies) e.update(delta);
+            // GAME OVER: musuh melayang keluar layar, lalu mulai lagi sendiri
+            for (Enemy e : enemies) {
+                e.vx = -e.cruise;
+                e.vy = 0f;
+                e.update(delta, viewW, viewH);
+            }
             overTimer -= delta;
             if (overTimer <= 0f) resetRun(viewW, viewH);
         }

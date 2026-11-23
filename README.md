@@ -9,8 +9,15 @@ tapi masih tersimpan di `assets/`).
 ## Cara bermain
 
 - Pesawatmu di sisi kiri layar; alien datang dari kanan tanpa henti.
-- **Drone** (ungu): cepat, hancur 1 tembakan, 100 poin.
-- **Gunner** (merah): lambat, 3 darah, menembak ke arahmu, 250 poin.
+- **Drone** (ungu, si keroco): cepat & lincah, 2 darah, menembak
+  beruntun 3x, 100 poin.
+- **Gunner** (merah): lambat & tebal, 5 darah, tembakan tunggal
+  terarah, 250 poin.
+- Semua musuh adalah **bot AI**: mereka memilih lawan terdekat — bisa
+  kamu, bisa alien lain (sesama alien saling serang!) — lalu menjaga
+  jarak tempur sambil menyamping dan menembak sasarannya. Musuh yang
+  terluka menampilkan bar darah di atas pesawatnya. Skor hanya didapat
+  dari musuh yang kamu hancurkan sendiri.
 - Darahmu 3 hati. Kena peluru/tabrakan = -1 hati + kebal sesaat (berkedip).
   Hati habis = game over, lalu mulai lagi sendiri dengan skor tertinggi
   tersimpan.

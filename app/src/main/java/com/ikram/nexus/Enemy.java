@@ -7,13 +7,19 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 
 /**
- * Pesawat alien (game pertempuran luar angkasa).
- * Dua jenis: DRONE (cepat, 1 darah, tidak menembak) dan GUNNER (lambat,
- * 3 darah, menembak ke arah pemain). Terbang dari kanan ke kiri dengan
- * gelombang sinus ringan. Sprite digambar prosedural sebagai gambar
- * vektor halus (poligon + elips di kanvas besar, diperkecil bilinear);
- * tekstur dipakai bersama oleh semua musuh (dibuat sekali statis).
- * Posisi x/y adalah titik TENGAH pesawat.
+ * Pesawat alien dengan AI (game pertempuran luar angkasa).
+ * Musuh adalah bot: mereka memilih lawan terdekat — bisa pemain ATAU
+ * musuh lain (sesama alien saling serang) — lalu bermanuver menjaga
+ * jarak tempur sambil menyamping (strafe), dan menembak beruntun ke
+ * arah sasarannya. Punya darah seperti pemain dan bar darah digambar
+ * di atas pesawatnya begitu darah berkurang.
+ *   DRONE  (keroco): cepat & lincah, 2 darah, tembakan beruntun 3x.
+ *   GUNNER (besar) : lambat & tebal, 5 darah, tembakan tunggal terarah.
+ * Sprite digambar prosedural sebagai gambar vektor halus; tekstur
+ * dipakai bersama oleh semua musuh (dibuat sekali statis).
+ * Posisi x/y adalah titik TENGAH pesawat. Otak AI (pemilihan sasaran
+ * & kemudi) dijalankan oleh NxRpgGame yang tahu seluruh dunia game;
+ * kelas ini menyimpan keadaan, gerak, tembakan, dan gambar.
  */
 public class Enemy {
 
@@ -22,6 +28,7 @@ public class Enemy {
 
     private static Texture[] sharedTextures;
     private static TextureRegion[] sharedRegions;
+    private static Texture whiteTex;
 
     private static void ensureTextures() {
         if (sharedTextures != null) return;
@@ -32,6 +39,11 @@ public class Enemy {
         for (int i = 0; i < 2; i++) {
             sharedRegions[i] = new TextureRegion(sharedTextures[i]);
         }
+        Pixmap pm = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pm.setColor(1f, 1f, 1f, 1f);
+        pm.fill();
+        whiteTex = new Texture(pm);
+        pm.dispose();
     }
 
     public static void disposeShared() {
@@ -39,6 +51,10 @@ public class Enemy {
             for (Texture t : sharedTextures) t.dispose();
             sharedTextures = null;
             sharedRegions = null;
+        }
+        if (whiteTex != null) {
+            whiteTex.dispose();
+            whiteTex = null;
         }
     }
 
@@ -175,17 +191,38 @@ public class Enemy {
         return toTexture(pm);
     }
 
+    // ---------- Keadaan bot ----------
+
     public final int type;
     public float x, y;
+    public float vx, vy;
     public int hp;
+    public final int maxHp;
     public final float radius;
     public final int scoreValue;
-    private final float baseY;
-    private final float speed;
-    private final float phase;
-    private final float waveAmp;
-    private float time;
-    private float fireTimer;
+    /** Kecepatan gerak maksimum & kecepatan jelajah tanpa sasaran. */
+    public final float maxSpeed;
+    public final float cruise;
+    /** Jarak tempur yang dijaga dari sasarannya. */
+    public final float prefRange;
+    public float phase;
+    public float time;
+
+    /** True bila yang menghancurkan musuh ini adalah pemain (untuk skor). */
+    public boolean killedByPlayer;
+
+    // Sasaran saat ini (diisi oleh AI di NxRpgGame)
+    public boolean hasTarget;
+    public boolean targetIsPlayer;
+    public Enemy targetEnemy;
+    public float targetX, targetY, targetDist;
+    public float retargetTimer;
+    public float strafeTimer;
+    public int strafeDir = 1;
+
+    private float fireCooldown;
+    private int burstLeft;
+    private float burstTimer;
     private float flashTime;
 
     public Enemy(int type, float startX, float startY) {
@@ -193,45 +230,80 @@ public class Enemy {
         this.type = type;
         x = startX;
         y = startY;
-        baseY = startY;
         phase = (float) (Math.random() * Math.PI * 2.0);
+        retargetTimer = (float) Math.random() * 0.5f;
+        strafeDir = Math.random() < 0.5 ? -1 : 1;
         if (type == GUNNER) {
-            hp = 3;
+            hp = maxHp = 5;
             radius = 10.5f;
             scoreValue = 250;
-            speed = 26f + (float) Math.random() * 8f;
-            waveAmp = 5f;
-            fireTimer = 1.2f + (float) Math.random() * 1.4f;
+            maxSpeed = 46f;
+            cruise = 26f;
+            prefRange = 145f;
+            fireCooldown = 1.0f + (float) Math.random() * 1.2f;
         } else {
-            hp = 1;
+            hp = maxHp = 2;
             radius = 8f;
             scoreValue = 100;
-            speed = 42f + (float) Math.random() * 18f;
-            waveAmp = 10f;
-            fireTimer = Float.MAX_VALUE;
+            maxSpeed = 82f;
+            cruise = 40f;
+            prefRange = 95f;
+            fireCooldown = 0.7f + (float) Math.random() * 1.0f;
         }
     }
 
-    public void update(float delta) {
+    public void update(float delta, float viewW, float viewH) {
         time += delta;
         if (flashTime > 0f) flashTime -= delta;
-        x -= speed * delta;
-        y = baseY + (float) Math.sin(time * 2.2f + phase) * waveAmp;
-        if (fireTimer != Float.MAX_VALUE) fireTimer -= delta;
+        x += vx * delta;
+        y += vy * delta;
+        if (y < 10f) y = 10f;
+        if (y > viewH - 10f) y = viewH - 10f;
+        if (x > viewW + 26f) x = viewW + 26f;
     }
 
-    /** True sekali tiap jeda tembak gunner tercapai; timer diatur ulang di sini. */
-    public boolean wantsFire() {
-        if (type != GUNNER || fireTimer > 0f) return false;
-        fireTimer = 2.3f + (float) Math.random() * 0.7f;
-        return true;
+    private float cooldownTime() {
+        return type == DRONE
+                ? 1.6f + (float) Math.random() * 0.9f
+                : 1.9f + (float) Math.random() * 0.7f;
     }
 
-    /** Kena peluru pemain. Return true bila musuh hancur. */
-    public boolean hit() {
-        hp--;
+    /**
+     * Mesin tembak bot. Dipanggil tiap frame; return true tepat pada
+     * frame sebuah peluru harus dibuat (game yang mengarahkannya ke
+     * sasaran). Drone menembak beruntun 3x, gunner 1x terarah.
+     */
+    public boolean updateFire(float delta, boolean engaged) {
+        if (fireCooldown > 0f) fireCooldown -= delta;
+        if (burstLeft > 0) {
+            burstTimer -= delta;
+            if (burstTimer <= 0f) {
+                burstLeft--;
+                burstTimer = 0.11f;
+                if (burstLeft == 0) fireCooldown = cooldownTime();
+                return true;
+            }
+            return false;
+        }
+        if (engaged && fireCooldown <= 0f) {
+            burstLeft = (type == DRONE ? 3 : 1) - 1;
+            burstTimer = 0.11f;
+            if (burstLeft == 0) fireCooldown = cooldownTime();
+            return true;
+        }
+        return false;
+    }
+
+    /** Terima kerusakan. Return true bila musuh hancur. */
+    public boolean damage(int amount) {
+        hp -= amount;
         flashTime = 0.12f;
         return hp <= 0;
+    }
+
+    /** Kena satu peluru. */
+    public boolean hit() {
+        return damage(1);
     }
 
     public boolean isGone() {
@@ -248,5 +320,18 @@ public class Enemy {
             batch.draw(sharedRegions[type], x - 15f, y - 15f, 30f, 30f);
         }
         batch.setColor(1f, 1f, 1f, 1f);
+        // Bar darah di atas pesawat, muncul begitu darah berkurang;
+        // dekat tepi atas dunia (tinggi 180) bar pindah ke bawah pesawat
+        if (hp < maxHp && hp > 0) {
+            float barW = radius * 2f;
+            float barX = x - barW / 2f;
+            float barY = y > 158f ? y - radius - 13f : y + radius + 9.5f;
+            float frac = (float) hp / (float) maxHp;
+            batch.setColor(0f, 0f, 0f, 0.55f);
+            batch.draw(whiteTex, barX - 0.6f, barY - 0.6f, barW + 1.2f, 3.6f);
+            batch.setColor(Math.min(1f, 1.7f * (1f - frac)), Math.min(1f, 1.7f * frac), 0.15f, 0.95f);
+            batch.draw(whiteTex, barX, barY, barW * frac, 2.4f);
+            batch.setColor(1f, 1f, 1f, 1f);
+        }
     }
 }
