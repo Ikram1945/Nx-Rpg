@@ -50,6 +50,12 @@ sekarang kembali ke menu utama (tidak lagi mulai sendiri).
   **mini roket auto-aim** — roket pengejar yang berbelok memburu
   sasarannya (damage **15**) setiap ±3 detik, maks 2 roket aktif
   per penembak. 175 poin, 18 koin.
+- **Alien Roket ELITE** (hijau gelap, besar, kubah emas): HP 120,
+  jarang muncul (5%). Menembakkan **ROKET BESAR**: damage **35**,
+  meledak beradius (percikan **15**), lebih cepat dan lebih lincah
+  memburu daripada mini roket, dengan jeda serangan singkat
+  (1,6-2,2 detik, maks 3 roket aktif) — tekanannya terasa terus.
+  400 poin, 45 koin.
 - **Kapal induk** (boss raksasa): hanya **SATU dalam setiap
   permainan**, muncul sekali setelah ±45 detik dengan peringatan
   "KAPAL INDUK MENDEKAT!". HP **500**, 2000 poin. Senjatanya:
@@ -72,14 +78,15 @@ sekarang kembali ke menu utama (tidak lagi mulai sendiri).
 - **Semua HP memakai sistem angka** (tidak ada lagi ikon hati), dan
   semua damage adalah angka TETAP yang tercatat — tidak pernah acak:
   peluru (pemain & musuh) **10**, tabrakan badan **20**, roket **20**
-  (+ percikan **10**), mini roket alien **15**. Darahmu **200**,
+  (+ percikan **10**), mini roket alien **15**, roket besar alien
+  elite **35** (+ percikan **15**). Darahmu **200**,
   tampil sebagai bar + tulisan
   "HP 200/200" di kiri atas (bar berubah hijau → kuning → merah).
   Kena serangan = kebal sesaat (berkedip). HP habis = game over, lalu
   kembali ke menu utama dengan skor tertinggi tersimpan.
 - Gelombang makin rapat seiring waktu. Komposisi musuh tetap:
-  alien **ungu (drone) 55%**, alien **kuning (gunner) 30%**, alien
-  **hijau (roket) 15%**, dan bot
+  alien **ungu (drone) 50%**, alien **kuning (gunner) 30%**, alien
+  **hijau (roket) 15%**, alien **elite 5%**, dan bot
   yang hidup bersamaan **dibatasi 30** — puluhan musuh di arena
   sekaligus. Mereka datang bergerombol (3-5 per kedatangan, makin
   sering seiring waktu) dan 14 langsung menyambut di awal

@@ -36,6 +36,10 @@ public class Enemy {
      *  auto-aim (pengejar) ke sasarannya — peluncuran & roketnya
      *  diatur SpaceWarGame. */
     public static final int ROCKETEER = 3;
+    /** Alien roket ELITE (hijau gelap, jauh lebih besar): menembakkan
+     *  ROKET BESAR — lebih cepat, lebih lincah memburu, damage jauh
+     *  lebih besar dan meledak beradius. Jarang muncul. */
+    public static final int ELITE_ROCKET = 4;
 
     private static Texture[] sharedTextures;
     private static TextureRegion[] sharedRegions;
@@ -43,13 +47,14 @@ public class Enemy {
 
     private static void ensureTextures() {
         if (sharedTextures != null) return;
-        sharedTextures = new Texture[4];
-        sharedRegions = new TextureRegion[4];
+        sharedTextures = new Texture[5];
+        sharedRegions = new TextureRegion[5];
         sharedTextures[DRONE] = buildDroneTexture();
         sharedTextures[GUNNER] = buildGunnerTexture();
         sharedTextures[MOTHERSHIP] = buildMothershipTexture();
         sharedTextures[ROCKETEER] = buildRocketeerTexture();
-        for (int i = 0; i < 4; i++) {
+        sharedTextures[ELITE_ROCKET] = buildEliteRocketTexture();
+        for (int i = 0; i < 5; i++) {
             sharedRegions[i] = new TextureRegion(sharedTextures[i]);
         }
         Pixmap pm = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
@@ -223,6 +228,39 @@ public class Enemy {
                 SpriteArt.col(56, 148, 66, 1f));
     }
 
+    // ---------- Alien roket ELITE: lambung hijau gelap berlapis baja + kubah emas ----------
+
+    private static Texture buildEliteRocketTexture() {
+        Pixmap pm = new Pixmap(320, 240, Pixmap.Format.RGBA8888);
+        Color outline = SpriteArt.col(16, 34, 20, 1f);
+        // Cahaya bawah badan
+        SpriteArt.fillEllipse(pm, 160, 162, 84, 15, SpriteArt.col(120, 255, 140, 0.25f));
+        // Cakram besar hijau gelap berlapis
+        SpriteArt.fillEllipse(pm, 160, 124, 122, 46, outline);
+        SpriteArt.fillEllipse(pm, 160, 120, 118, 43, SpriteArt.col(30, 96, 42, 1f));
+        SpriteArt.fillEllipse(pm, 160, 112, 108, 34, SpriteArt.col(44, 128, 58, 1f));
+        // Sabuk baja di tengah lambung
+        SpriteArt.fillEllipse(pm, 160, 126, 118, 16, SpriteArt.col(52, 62, 58, 1f));
+        SpriteArt.fillEllipse(pm, 160, 124, 118, 12, SpriteArt.col(74, 88, 82, 1f));
+        // Baut-baut baja di sabuk
+        for (int i = 0; i < 6; i++) {
+            float bx = 66f + i * 38f;
+            SpriteArt.fillEllipse(pm, bx, 124, 4.5f, 4.5f, SpriteArt.col(150, 165, 158, 1f));
+        }
+        // Kubah kemudi EMAS
+        SpriteArt.fillEllipse(pm, 172, 88, 36, 24, outline);
+        SpriteArt.fillEllipse(pm, 172, 85, 31, 20, SpriteArt.col(240, 188, 74, 1f));
+        SpriteArt.fillEllipse(pm, 162, 77, 11, 7, SpriteArt.col(255, 246, 205, 0.95f));
+        // Dua roket besar terpasang di atas & bawah, hidung ke KIRI
+        gambarRoketKecil(pm, 92, 56);
+        gambarRoketKecil(pm, 92, 176);
+        // Lampu peringatan merah berderet
+        SpriteArt.fillEllipse(pm, 226, 118, 6, 6, SpriteArt.col(255, 70, 55, 1f));
+        SpriteArt.fillEllipse(pm, 100, 122, 5, 5, SpriteArt.col(255, 70, 55, 1f));
+        SpriteArt.fillEllipse(pm, 160, 138, 5, 5, SpriteArt.col(255, 190, 80, 1f));
+        return SpriteArt.toTexture(pm);
+    }
+
     // ---------- Keadaan bot ----------
 
     public final int type;
@@ -301,6 +339,16 @@ public class Enemy {
             prefRange = 175f;
             turnRate = 260f;
             fireCooldown = 1.2f + (float) Math.random() * 1.2f;
+        } else if (type == ELITE_ROCKET) {
+            hp = maxHp = 120;
+            radius = 14f;
+            scoreValue = 400;
+            coinValue = 45;
+            maxSpeed = 38f;
+            cruise = 24f;
+            prefRange = 190f;
+            turnRate = 180f;
+            fireCooldown = 1.4f + (float) Math.random() * 1.0f;
         } else {
             hp = maxHp = 20;
             radius = 8f;
@@ -376,6 +424,20 @@ public class Enemy {
         return false;
     }
 
+    /**
+     * Khusus alien roket ELITE: sama seperti siapRoket, tapi jeda
+     * serangannya jauh lebih singkat (1,6-2,2 detik) — serangannya
+     * terasa terus-menerus menekan.
+     */
+    public boolean siapRoketBesar(float delta, boolean engaged) {
+        if (fireCooldown > 0f) fireCooldown -= delta;
+        if (engaged && fireCooldown <= 0f) {
+            fireCooldown = 1.6f + (float) Math.random() * 0.6f;
+            return true;
+        }
+        return false;
+    }
+
     /** Terima kerusakan. Return true bila musuh hancur. */
     public boolean damage(int amount) {
         hp -= amount;
@@ -410,6 +472,9 @@ public class Enemy {
         } else if (type == ROCKETEER) {
             batch.draw(sharedRegions[type], x - 20f, y - 15f,
                     20f, 15f, 40f, 30f, 1f, 1f, rot);
+        } else if (type == ELITE_ROCKET) {
+            batch.draw(sharedRegions[type], x - 28f, y - 21f,
+                    28f, 21f, 56f, 42f, 1f, 1f, rot);
         } else {
             batch.draw(sharedRegions[type], x - 15f, y - 15f,
                     15f, 15f, 30f, 30f, 1f, 1f, rot);
